@@ -1,6 +1,9 @@
 # macOS Finder metadata
 .DS_Store
 
+# Local development plans and internal docs
+docs/
+
 # Xcode build products (for future native app work)
 DerivedData/
 build/
