@@ -125,7 +125,7 @@ cd macOS
 ./scripts/package-release.sh
 ~~~
 
-脚本为当前 Mac 架构编译并生成 ZIP 与 SHA256SUMS.txt；若要提供另一个架构的包，需要在对应架构的 Mac 上构建。应用使用 ad-hoc 签名，不要求 Apple Developer Program 会员资格，也没有 Developer ID 签名或 Apple 公证。只生成本机 .app 可运行 ./scripts/package-app.sh。干净 Mac 验收步骤见[未签名 Release 检查清单](docs/release/unsigned-macos-release-checklist.md)。
+脚本为当前 Mac 架构编译并生成 ZIP 与 SHA256SUMS.txt；若要提供另一个架构的包，需要在对应架构的 Mac 上构建。应用使用 ad-hoc 签名，不要求 Apple Developer Program 会员资格，也没有 Developer ID 签名或 Apple 公证。只生成本机 .app 可运行 ./scripts/package-app.sh。
 
 ## 隐私与安全
 
@@ -139,7 +139,6 @@ cd macOS
 ## 项目文档
 
 - [开发与产品 SPEC](SPEC.md)
-- [未签名 macOS Release 检查清单](docs/release/unsigned-macos-release-checklist.md)
 - 运行时 UI 源码：macOS/Sources/TodoDesktop/Resources/prototype.html
 - Swift 源码：macOS/Sources/TodoDesktop/
 
