@@ -1,0 +1,17 @@
+# macOS Finder metadata
+.DS_Store
+
+# Xcode build products (for future native app work)
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+
+# Frontend dependencies and generated output (for future prototype/app work)
+node_modules/
+dist/
+
+# SwiftPM and packaged macOS app outputs
+macOS/.build/
+macOS/build/
+macOS/.swiftpm/

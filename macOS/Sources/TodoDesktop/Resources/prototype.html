@@ -1,0 +1,1702 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>飞书桌面便签 · 前端原型</title>
+<style>
+  :root { color-scheme: light; --ink:#35443f; --muted:#7d8984; --line:#c9d7d1; --accent:#718f81; --paper:#eef0e4; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:#ecece9; font:14px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif; color:var(--ink); }
+  .desktop { width:min(1100px,94vw); height:min(760px,90vh); position:relative; border:1px solid #fff; border-radius:18px; background:#e3e4e1; box-shadow:0 24px 65px #30362e20; overflow:hidden; }
+  .note.is-empty .title { display:none; }
+  .note.is-empty .network-indicator { display:none; }
+  .note.is-empty .title-row { justify-content:flex-end; }
+  .note.is-empty .drag { display:none; }
+  .note.is-empty .note-head { padding:10px 12px 0; border-bottom:0; }
+  .note.is-empty .progress,.note.is-empty .projection-warning,.note.is-empty #active-list,.note.is-empty .completed,.note.is-empty .foot { display:none; }
+  .note-empty { flex:1; display:flex; align-items:center; justify-content:center; padding:20px 26px 34px; text-align:center; color:#77786e; }
+  .note-empty[hidden] { display:none; }
+  .note-empty-content { width:100%; max-width:250px; font-size:14px; letter-spacing:.2px; line-height:1.7; }
+  .closed-note-content { display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .closed-note-content[hidden] { display:none; }
+  .closed-note-content strong { color:#54554c; font-size:14px; font-weight:620; }
+  .closed-note-content span { color:#858478; font-size:11px; }
+  .closed-note-content button { margin-top:5px; }
+  .auth-empty { display:flex; flex-direction:column; align-items:center; }
+  .auth-empty[hidden] { display:none; }
+  .auth-mark { display:grid; place-items:center; width:34px; height:34px; margin-bottom:13px; border:1px solid #e5dec6; border-radius:10px; color:#71836a; background:#fffdf3; }
+  .auth-mark svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+  .auth-title { margin:0; color:#454239; font-size:15px; font-weight:620; letter-spacing:0; line-height:1.45; }
+  .auth-description { max-width:220px; margin:7px 0 16px; color:#777367; font-size:11px; line-height:1.6; }
+  .auth-account { margin:-7px 0 13px; color:#777367; font-size:10.5px; }
+  .auth-primary { display:flex; align-items:center; justify-content:center; min-width:156px; min-height:36px; padding:0 16px; border:1px solid #71856e; border-radius:7px; color:#fffdf5; background:#71856e; font:600 11.5px -apple-system,BlinkMacSystemFont,sans-serif; cursor:pointer; transition:background-color .15s ease,border-color .15s ease,transform .15s ease; }
+  .auth-primary:hover { border-color:#5f755f; background:#5f755f; }
+  .auth-primary:active { transform:translateY(1px); }
+  .auth-primary:focus-visible { outline:2px solid #8ea082; outline-offset:3px; }
+  .auth-primary:disabled { cursor:wait; opacity:.78; }
+  .auth-status { min-height:15px; margin:11px 0 0; color:#766f60; font-size:10px; }
+  .auth-status:empty { display:none; }
+  .auth-empty.is-authorizing .auth-mark { animation:auth-pulse 1.5s ease-in-out infinite; }
+  .auth-empty.is-authorizing .auth-status { color:#64795f; }
+  .auth-empty.is-error .auth-status { color:#a35f4c; }
+  @keyframes auth-pulse { 50% { box-shadow:0 0 0 4px #71836a15; } }
+  @media(prefers-reduced-motion:reduce) { .auth-empty.is-authorizing .auth-mark { animation:none; } .auth-primary { transition:none; } }
+  .note-empty-hint { margin-top:8px; color:#a09f95; font-size:11px; }
+  .empty-hint { margin-top:8px; color:#a09f95; font-size:11px; }
+  .note.is-empty #menu-window-group,.note.is-empty #menu-appearance-group,.note.is-empty #close-current-page,.note.is-empty #delete-note-button { display:none; }
+  .note.is-empty .more-menu .menu-separator { display:none; }
+  #logout-feishu { display:none; }
+  .note.is-authenticated #logout-feishu { display:flex; }
+  .dialog-backdrop { position:absolute; z-index:80; inset:0; display:none; place-items:center; background:#22251f45; }
+  .dialog-backdrop.open { display:grid; }
+  .dialog { width:min(390px,calc(100% - 40px)); padding:20px; border:1px solid #e4e4dc; border-radius:13px; background:#fafaf4; box-shadow:0 15px 45px #171a1640; transform:rotate(-.3deg); }
+  .dialog h2 { margin:0 0 5px; color:#45483f; font-size:15px; font-weight:650; }
+  .dialog p { margin:0 0 15px; color:#858478; font-size:11px; }
+  .dialog input[type=url] { width:100%; height:36px; padding:0 10px; border:1px solid #d7dbd0; border-radius:7px; outline:none; color:#424840; background:#fffef9; font:12px -apple-system,sans-serif; }
+  .dialog input[type=url]:focus { border-color:#8a9c8d; box-shadow:0 0 0 2px #8a9c8d24; }
+  .dialog-error { min-height:18px; margin-top:6px; color:#a35f4c; font-size:11px; }
+  .dialog-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; }
+  .dialog-button { padding:7px 12px; border:1px solid #d9ddd2; border-radius:7px; color:#596159; background:#f6f7f0; font:12px -apple-system,sans-serif; cursor:pointer; }
+  .dialog-button.primary { border-color:#738d7d; color:#fff; background:#738d7d; }
+  .notebook-list { display:grid; gap:6px; max-height:310px; overflow:auto; }
+  .notebook-entry { display:flex; justify-content:space-between; align-items:center; gap:8px; min-width:0; padding:10px; border:1px solid #e2e4da; border-radius:8px; background:#fffef9; }
+  .notebook-entry-info { flex:1; min-width:0; }
+  .notebook-entry strong { display:block; overflow:hidden; color:#4b5149; font-size:12px; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
+  .notebook-entry button { flex:none; padding:4px 2px; border:0; color:#718879; background:transparent; font:11px -apple-system,sans-serif; white-space:nowrap; cursor:pointer; }
+  .notebook-entry button:disabled { color:#a7a69b; cursor:default; }
+  .notebook-entry-actions { display:flex; flex:none; align-items:center; gap:6px; margin-left:auto; }
+  .note { position:absolute; left:112px; top:118px; width:310px; height:390px; min-width:270px; min-height:260px; display:flex; flex-direction:column; border-radius:11px; background:transparent; box-shadow:0 7px 17px #34382b24,0 1px 2px #34382b18; overflow:visible; transform:rotate(-1.2deg); transform-origin:center; isolation:isolate; --paper-opacity:1; --paper-image:none; --font-cn:"PingFang SC"; --font-en:-apple-system; --task-text-color:#454239; --task-font-weight:400; --task-font-style:normal; }
+  .note.pinned { box-shadow:0 10px 24px #34382b38,0 1px 2px #34382b18; }
+  .note-secondary { pointer-events:none; box-shadow:0 6px 15px #34382b20,0 1px 2px #34382b16; }
+  .note-secondary .resize-handle,.note-secondary .progress { display:none!important; }
+  .note:before { content:""; position:absolute; z-index:-1; inset:0; border-radius:inherit; background-color:var(--paper); background-image:var(--paper-image); background-position:center; background-size:cover; opacity:var(--paper-opacity); pointer-events:none; }
+  /* 八个透明热区让四边和四角都可以拖拽缩放；静止时不影响便签外观。 */
+  .resize-handle { position:absolute; z-index:10; touch-action:none; }
+  .resize-handle.n,.resize-handle.s { left:10px; right:10px; height:7px; cursor:ns-resize; }
+  .resize-handle.n { top:-3px; } .resize-handle.s { bottom:-3px; }
+  .resize-handle.e,.resize-handle.w { top:10px; bottom:10px; width:7px; cursor:ew-resize; }
+  .resize-handle.e { right:-3px; } .resize-handle.w { left:-3px; }
+  .resize-handle.ne,.resize-handle.nw,.resize-handle.se,.resize-handle.sw { width:13px; height:13px; }
+  .resize-handle.ne { top:-4px; right:-4px; cursor:nesw-resize; }
+  .resize-handle.nw { top:-4px; left:-4px; cursor:nwse-resize; }
+  .resize-handle.se { bottom:-4px; right:-4px; cursor:nwse-resize; }
+  .resize-handle.sw { bottom:-4px; left:-4px; cursor:nesw-resize; }
+  .note-head { flex:0 0 auto; padding:15px 17px 12px; background:transparent; border-bottom:1px solid #d9ded3; }
+  .drag { display:flex; justify-content:center; margin:-5px 0 11px; }
+  .drag i { width:28px; height:3px; border-radius:3px; background:#c3c9bd; }
+  .title-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .title-meta { display:flex; align-items:center; gap:8px; min-width:0; }
+  .title { font-size:16px; font-weight:650; letter-spacing:.1px; }
+  .network-indicator { flex:0 0 7px; width:7px; height:7px; border-radius:50%; background:#718f68; box-shadow:0 0 0 2px #718f681a; }
+  .network-indicator.is-offline { background:#c45f50; box-shadow:0 0 0 2px #c45f501a; }
+  .date-switcher { display:flex; align-items:center; justify-content:center; margin-top:7px; }
+  .date-switcher button { height:25px; border:1px solid #e5dec9; color:#5a574d; background:#fffdf5; font:13px/1 -apple-system,BlinkMacSystemFont,sans-serif; cursor:pointer; }
+  .date-switcher button:hover { background:#f4f0e2; }
+  .date-switcher button:focus-visible { outline:2px solid #85947b; outline-offset:2px; }
+  .date-step { width:28px; font-size:20px!important; }
+  .date-step svg { display:block; width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  #previous-day { border-radius:7px 0 0 7px; }
+  #next-day { border-radius:0 7px 7px 0; }
+  .date-today { min-width:58px; padding:0 10px; border-right:0!important; border-left:0!important; font-size:11px!important; font-weight:550!important; }
+  .note.is-empty .date-switcher { display:none; }
+  .actions { display:flex; gap:5px; color:#918a7c; position:relative; }
+  .icon { display:flex; align-items:center; justify-content:center; padding:0; border:0; background:transparent; color:inherit; width:25px; height:25px; border-radius:6px; cursor:pointer; }
+  .ellipsis-mark { display:flex; align-items:center; justify-content:center; gap:2px; width:12px; height:12px; }
+  .ellipsis-mark i { display:block; width:2.5px; height:2.5px; border-radius:50%; background:currentColor; }
+  .icon:hover { background:#dfe3d8; }
+  .add-note-icon { color:#627b69; font-size:20px; line-height:1; }
+  .more-menu,.personalize-panel { display:none; position:absolute; right:0; top:31px; z-index:30; padding:5px; border:1px solid #d9ded3; border-radius:8px; background:#fbfbf5; box-shadow:0 8px 22px #34382b25; transform:rotate(1.2deg); }
+  .more-menu.open,.personalize-panel.open { display:block; }
+  .more-menu { width:154px; }
+  .add-menu { display:none; position:absolute; right:34px; top:31px; z-index:31; width:132px; padding:5px; border:1px solid #d9ded3; border-radius:8px; background:#fbfbf5; box-shadow:0 8px 22px #34382b25; }
+  .add-menu.open { display:block; }
+  .menu-item { width:100%; display:flex; justify-content:space-between; align-items:center; border:0; border-radius:5px; padding:8px 9px; color:#45483f; background:transparent; text-align:left; font:inherit; font-size:12px; cursor:pointer; }
+  .menu-item:hover { background:#eef0e4; }
+  .menu-group-wrap { position:relative; }
+  .menu-group { gap:12px; }
+  .submenu-chevron { color:#999687; font-size:14px; line-height:1; }
+  .menu-submenu { display:none; position:absolute; right:calc(100% - 4px); top:-4px; z-index:1; width:max-content; min-width:100px; max-width:calc(100vw - 24px); padding:5px; border:1px solid #d9ded3; border-radius:8px; background:#fbfbf5; box-shadow:0 8px 22px #34382b25; }
+  .menu-submenu .menu-item { width:100%; white-space:nowrap; }
+  .menu-submenu.open { display:block; }
+  .menu-item:disabled { color:#b5b4aa; cursor:not-allowed; }
+  .menu-item:disabled:hover { background:transparent; }
+  .task-create-dialog { width:min(330px,calc(100% - 32px)); transform:none; }
+  .task-create-field { display:grid; gap:6px; margin-top:13px; color:#777367; font-size:11px; }
+  .task-create-field input,.task-create-field select { width:100%; height:36px; padding:0 10px; border:1px solid #d7dbd0; border-radius:7px; outline:none; color:#424840; background:#fffef9; font:12px -apple-system,sans-serif; }
+  .task-create-field input:focus,.task-create-field select:focus { border-color:#8a9c8d; box-shadow:0 0 0 2px #8a9c8d24; }
+  .task-create-field select { appearance:none; -webkit-appearance:none; }
+  .task-create-date { padding:8px 10px; border:1px solid #e4e4dc; border-radius:7px; color:#55554a; background:#f6f5ec; font-size:12px; }
+  .task-create-error { min-height:17px; margin-top:7px; color:#a35f4c; font-size:11px; line-height:1.5; }
+  .dialog-button:disabled { opacity:.5; cursor:not-allowed; }
+  .focus-start { flex:0 0 24px; width:24px; height:24px; margin:-3px 0 0 auto; border:0; border-radius:50%; color:#6e806f; background:transparent; cursor:pointer; opacity:.45; }
+  .focus-start:hover,.task:focus-within .focus-start { opacity:1; background:#e8eddf; }
+  .planned-duration { flex:0 0 auto; color:#8b8778; font-size:10px; white-space:nowrap; }
+  .planned-duration.is-empty { opacity:.62; }
+  .note.is-focus-mode .note-empty,.note.is-focus-mode #active-list,.note.is-focus-mode .completed,.note.is-focus-mode .foot { display:none!important; }
+  .focus-panel { display:none; flex:1 1 auto; min-height:0; overflow-y:auto; flex-direction:column; align-items:center; justify-content:center; padding:8px 20px 18px; text-align:center; }
+  .note.is-focus-mode .focus-panel { display:flex; }
+  .focus-task-title { width:100%; margin:0 0 8px; color:#4a473c; font-size:14px; font-weight:600; line-height:1.4; overflow-wrap:anywhere; }
+  .focus-plan-label { min-height:17px; color:#8c8676; font-size:10px; }
+  .focus-clock { position:relative; width:min(186px,38vh,58vw); aspect-ratio:1; margin:7px 0 12px; flex:0 0 auto; }
+  .focus-clock svg { width:100%; height:100%; transform:rotate(-90deg); }
+  .focus-ring { fill:none; stroke-linecap:round; }
+  .focus-ring.plan-track { stroke:#e9e2c9; stroke-width:6; }
+  .focus-ring.plan-progress { stroke:#b6a867; stroke-width:6; transition:stroke-dashoffset .3s linear; }
+  .focus-ring.round-track { stroke:#d9e1d5; stroke-width:5; }
+  .focus-ring.round-progress { stroke:#718974; stroke-width:5; transition:stroke-dashoffset .3s linear; }
+  .focus-clock-center { position:absolute; inset:0; display:flex; flex-direction:column; justify-content:center; align-items:center; gap:3px; }
+  .focus-time { color:#45443b; font-size:26px; font-variant-numeric:tabular-nums; font-weight:600; letter-spacing:.02em; }
+  .focus-caption { color:#888373; font-size:10px; }
+  .focus-status { min-height:18px; color:#75826d; font-size:11px; }
+  .focus-actions { display:flex; align-items:center; gap:8px; margin-top:7px; }
+  .focus-action { min-width:75px; height:30px; padding:0 12px; border:1px solid #d9ddcf; border-radius:8px; color:#57594e; background:#fffbed; font:inherit; font-size:11px; cursor:pointer; }
+  .focus-action.primary { border-color:#718674; color:#fff; background:#718674; }
+  .focus-action:hover { filter:brightness(.97); }
+  .focus-settings { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px 10px; width:100%; max-width:250px; margin:10px 0 0; padding:9px; border:1px solid #e7e1cf; border-radius:9px; background:#fffced9c; text-align:left; }
+  .focus-settings[hidden] { display:none; }
+  .focus-settings label { display:grid; gap:3px; color:#827d6f; font-size:9px; }
+  .focus-settings input { width:100%; height:25px; padding:0 6px; border:1px solid #ddd8c9; border-radius:5px; color:#49483f; background:#fffef8; font:11px -apple-system,sans-serif; }
+  .focus-settings button { grid-column:1/-1; height:25px; border:0; border-radius:5px; color:#536752; background:#e9eddf; font:inherit; font-size:10px; cursor:pointer; }
+  .menu-separator { height:1px; margin:4px 5px; background:#e4e5da; }
+  .personalize-panel { width:250px; max-height:calc(100vh - 40px); overflow:auto; padding:13px; color:#45483f; font-size:11px; }
+  .personalize-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:11px; font-size:12px; font-weight:600; }
+  .personalize-close { border:0; background:transparent; color:#797d73; cursor:pointer; font-size:16px; }
+  .setting { display:grid; gap:5px; margin:9px 0; }
+  .setting-label { color:#777b70; }
+  .setting select,.setting input[type="range"] { width:100%; }
+  .text-color-options { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+  .text-color-swatch { width:20px; height:20px; padding:0; border:2px solid #fffefa; border-radius:50%; box-shadow:0 0 0 1px #d7d2c3; cursor:pointer; }
+  .text-color-swatch[aria-pressed="true"] { box-shadow:0 0 0 2px #738674; }
+  .text-color-custom { width:25px!important; height:25px; padding:2px; border:1px solid #d7d2c3; border-radius:6px; background:#fffefa; cursor:pointer; }
+  .text-style-toggles { display:flex; gap:6px; }
+  .text-style-toggle,.text-style-reset { min-width:31px; height:27px; padding:0 8px; border:1px solid #ded8c6; border-radius:6px; color:#5c5a50; background:#fffefa; font:12px -apple-system,sans-serif; cursor:pointer; }
+  .text-style-toggle[aria-pressed="true"] { border-color:#81917d; color:#465b48; background:#edf0e6; }
+  .text-style-reset { margin-left:auto; color:#777367; font-size:10px; }
+  .style-preview { overflow:hidden; padding:7px 8px; border:1px solid #e8e1ce; border-radius:6px; color:var(--preview-text-color,#454239); background:#fff9df; font-size:11px; font-weight:var(--preview-font-weight,400); font-style:var(--preview-font-style,normal); text-overflow:ellipsis; white-space:nowrap; }
+  .contrast-warning { display:none; color:#a35f4c; font-size:10px; line-height:1.4; }
+  .contrast-warning.visible { display:block; }
+  .fixed-task-panel { width:250px; max-height:calc(100vh - 40px); overflow:auto; padding:13px; color:#45483f; font-size:11px; }
+  .fixed-task-intro { margin:0 0 10px; color:#858173; font-size:10px; line-height:1.45; }
+  .fixed-task-form { display:grid; gap:6px; padding-top:10px; border-top:1px solid #e8e2d1; }
+  .fixed-task-form[hidden] { display:none; }
+  .fixed-task-show-form { width:100%; height:29px; margin-top:8px; border:1px solid #d7ddcf; border-radius:6px; color:#5e755f; background:#f8f8ef; font:inherit; cursor:pointer; }
+  .fixed-task-show-form:hover { background:#eef1e7; }
+  .fixed-task-form input,.fixed-task-form select { width:100%; min-width:0; height:30px; padding:0 7px; border:1px solid #d9ded3; border-radius:5px; color:#45483f; background:#fffef9; font:11px -apple-system,sans-serif; }
+  .fixed-task-form-actions { display:flex; gap:6px; }
+  .fixed-task-form button { flex:1; height:28px; border:0; border-radius:5px; color:#fff; background:#718674; font:inherit; cursor:pointer; }
+  .fixed-task-form button.secondary { border:1px solid #d9ded3; color:#66675d; background:transparent; }
+  .fixed-task-form button:disabled { opacity:.5; cursor:not-allowed; }
+  .fixed-task-list { display:grid; gap:5px; margin-top:8px; }
+  .fixed-task-empty,.fixed-task-error { color:#8a8578; font-size:10px; line-height:1.45; }
+  .fixed-task-error { color:#a35f4c; }
+  .fixed-task-row { display:flex; align-items:center; gap:6px; padding:6px 7px; border:1px solid #e8e2d1; border-radius:6px; background:#fffdf4; }
+  .fixed-task-info { flex:1; min-width:0; }
+  .fixed-task-name { overflow:hidden; color:#4e4a3f; text-overflow:ellipsis; white-space:nowrap; }
+  .fixed-task-meta { margin-top:2px; color:#8b8578; font-size:9px; }
+  .fixed-task-actions { display:flex; flex:0 0 auto; gap:6px; }
+  .fixed-task-actions button { padding:2px 0; border:0; color:#617a64; background:transparent; font:inherit; cursor:pointer; }
+  .fixed-task-actions button:last-child { color:#a35f4c; }
+  .fixed-task-actions .fixed-task-retry { color:#a35f4c; }
+  .select-wrap { position:relative; width:100%; }
+  .select-wrap:after { content:""; position:absolute; right:10px; top:50%; width:6px; height:6px; border-right:1.4px solid #777b70; border-bottom:1.4px solid #777b70; transform:translateY(-70%) rotate(45deg); pointer-events:none; }
+  .setting select { appearance:none; -webkit-appearance:none; width:100%; padding:6px 28px 6px 7px; border:1px solid #d9ded3; border-radius:5px; background:#fffef9; color:#45483f; font:inherit; font-size:11px; cursor:pointer; }
+  .upload-button { position:relative; display:block; overflow:hidden; padding:7px; border:1px dashed #b9bdae; border-radius:5px; text-align:center; cursor:pointer; color:#626a5e; }
+  .upload-button:hover { background:#f1f2e9; }
+  .background-actions { display:flex; align-items:center; gap:7px; }
+  .background-actions .upload-button { flex:1; }
+  .background-remove { padding:7px 9px; border:1px solid #d9ded3; border-radius:5px; color:#777b70; background:transparent; font:inherit; cursor:pointer; }
+  .background-remove:hover:not(:disabled) { background:#f1f2e9; color:#9a5142; }
+  .background-remove:disabled { opacity:.45; cursor:not-allowed; }
+  .file-input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
+  .subtitle { margin-top:4px; color:var(--muted); font-size:11px; }
+  .progress { display:flex; align-items:center; gap:8px; margin-top:13px; color:#777064; font-size:11px; }
+  .projection-warning { margin:7px 0 0; color:#9a6a35; font-size:10px; line-height:1.4; }
+  .projection-warning summary { cursor:pointer; list-style:none; }
+  .projection-warning summary::-webkit-details-marker { display:none; }
+  .projection-warning summary::before { content:'!'; display:inline-grid; place-items:center; width:13px; height:13px; margin-right:5px; border:1px solid currentColor; border-radius:50%; font-size:9px; font-weight:700; }
+  .projection-warning[hidden] { display:none!important; }
+  .projection-warning-list { max-height:100px; overflow:auto; margin:5px 0 0 18px; padding:0; list-style:none; color:#777064; }
+  .projection-warning-list li { padding:2px 0; overflow-wrap:anywhere; }
+  .bar { height:3px; flex:1; border-radius:3px; background:#d8ddd2; overflow:hidden; }
+  .bar span { display:block; height:100%; width:38%; border-radius:3px; background:#849a78; }
+  .open-source-progress { flex:0 0 18px; width:18px; height:20px; margin-left:1px; color:inherit; font-size:15px; line-height:1; }
+  .task-list { padding:7px 16px 0; overflow:auto; min-height:0; }
+  /* 短列表按内容收缩；超出可用高度时在列表内部滚动。 */
+  #active-list { flex:0 1 auto; max-height:48%; min-height:48px; }
+  #active-list.is-all-done { flex:0 0 auto; min-height:0; overflow:visible; padding-block:clamp(8px,3vh,18px); }
+  #active-list.is-all-done .empty-hint { padding:0; }
+  .task { display:flex; align-items:flex-start; gap:10px; padding:11px 2px; border-bottom:1px solid #dce1d7; cursor:pointer; }
+  .check { appearance:none; flex:0 0 16px; width:16px; height:16px; margin:2px 0 0; border:1.4px solid #9da99e; border-radius:50%; background:#f8f8f1; cursor:pointer; position:relative; }
+  .check:checked { background:#849a78; border-color:#849a78; }
+  .check:checked:after { content:""; position:absolute; left:50%; top:46%; width:4px; height:7px; border-right:1.5px solid white; border-bottom:1.5px solid white; transform:translate(-50%,-50%) rotate(45deg); }
+  .task-text { flex:1; min-width:0; color:var(--task-text-color); font-size:13px; line-height:1.45; font-weight:var(--task-font-weight); font-style:var(--task-font-style); }
+  .task-editable-field { cursor:text; border-radius:3px; }
+  .task-editable-field:hover { background:#7773670d; }
+  .task-editable-field:focus-visible { outline:1px solid #8a9c8d; outline-offset:2px; }
+  .task-inline-editor { min-width:0; height:25px; padding:1px 5px; border:1px solid #9aaa91; border-radius:5px; outline:none; color:#454239; background:#fffef8; font:inherit; }
+  .task-inline-editor.title-editor { flex:1 1 auto; width:100%; font-size:13px; }
+  .task-inline-editor.duration-editor { flex:0 0 48px; width:48px; text-align:right; font-size:10px; }
+  .task-inline-editor.priority-editor { flex:0 0 auto; max-width:70px; font-size:10px; }
+  .task-text .cn-text { font-family:var(--font-cn),sans-serif; }
+  .task-text .en-text { font-family:var(--font-en),sans-serif; }
+  .task.done .task-text { opacity:.62; text-decoration:line-through; }
+  .priority { flex:0 0 auto; color:#6e8171; font-size:10px; padding-top:2px; }
+  .priority.high { color:#9d705e; }
+  .completed { position:relative; margin:7px 16px 0; border-top:1px solid var(--line); flex:0 0 auto; min-height:0; }
+  /* 展开区按内容撑开，超出与待完成区相同的高度上限后由列表自身滚动。 */
+  .completed[open] { display:flex; flex:0 0 auto; flex-direction:column; min-height:0; overflow:visible; }
+  .completed summary { padding:12px 1px; list-style:none; display:flex; align-items:center; justify-content:space-between; color:#807868; font-size:11px; cursor:pointer; }
+  .completed[open] summary { flex:0 0 auto; }
+  .completed summary::-webkit-details-marker { display:none; }
+  .completed summary:before { content:"▸"; margin-right:7px; color:#82917e; }
+  .completed[open] summary:before { content:"▾"; }
+  .summary-left { margin-right:auto; }
+  .count { color:#a49a84; }
+  .completed .task-list { padding:0 0 5px; }
+  .completed[open] .task-list { display:block; flex:0 0 auto; width:100%; min-height:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; scrollbar-width:none; }
+  .completed[open] .task-list::-webkit-scrollbar { display:none; width:0; }
+  .completed-scroll-track { display:none; position:absolute; z-index:2; top:39px; right:-15px; bottom:7px; width:8px; border-radius:8px; background:#e8e1cc; touch-action:none; cursor:pointer; }
+  .completed.has-overflow .completed-scroll-track { display:block; }
+  .completed-scroll-thumb { position:absolute; top:0; left:1px; width:6px; min-height:22px; border-radius:6px; background:#928d78; cursor:grab; }
+  .completed-scroll-thumb:active { cursor:grabbing; }
+  .completed .task { padding:8px 1px; }
+  .foot { padding:10px 18px 14px; display:flex; justify-content:space-between; align-items:center; color:#76918a; font-size:10px; flex:0 0 auto; }
+  .link { border:0; padding:0; color:#647b68; background:none; font:inherit; cursor:pointer; }
+  .toast { position:absolute; bottom:24px; right:25px; padding:9px 13px; border-radius:9px; color:#fff; background:#37342e; box-shadow:0 4px 18px #0003; opacity:0; transform:translateY(7px); transition:.2s; font-size:12px; }
+  .toast.show { opacity:1; transform:translateY(0); }
+  @media(max-width:700px) { .note { left:16px; top:65px; width:min(310px,calc(100% - 32px)); } }
+
+  /* 桌面便签样式：用温和的纸色和清晰排版托住任务，不依赖纹理或装饰图案。 */
+  :root {
+    --ink:#39372f;
+    --muted:#777367;
+    --line:#e8e1c9;
+    --accent:#687f6b;
+    --paper:#fff9df;
+  }
+  body { background:#efeee9; color:var(--ink); }
+  .desktop {
+    border:1px solid #f8f7f2;
+    border-radius:20px;
+    background:#e8e7e1;
+    box-shadow:0 20px 48px #39372f12;
+  }
+  .note {
+    border-radius:14px;
+    box-shadow:0 9px 24px #53492b20, 0 2px 5px #53492b0d;
+    transform:none;
+    transform-origin:center;
+  }
+  .note:before {
+    border:1px solid #eee5c8;
+    border-radius:inherit;
+    background-color:var(--paper);
+  }
+  .note.pinned { box-shadow:0 11px 26px #53492b27, 0 2px 5px #53492b0d; }
+  .note-head { padding:15px 16px 13px; border-bottom:1px solid #e9e2cb; }
+  .drag { margin:-5px 0 10px; }
+  .drag i { width:26px; height:3px; background:#d6cfb8; }
+  .title { color:#3f3b31; font-size:15px; font-weight:650; letter-spacing:0; }
+  .actions { gap:4px; color:#77715f; }
+  .icon { width:28px; height:28px; border-radius:7px; transition:background-color .15s ease,color .15s ease; }
+  .icon:hover { background:#f0e9ce; color:#45483f; }
+  .add-note-icon { color:#637a64; font-size:21px; font-weight:400; }
+  .date-switcher { margin-top:8px; }
+  .date-switcher button { border-color:#e7e0cc; background:#fff9e8; color:#5a574d; }
+  .date-switcher button:hover { background:#f5efd9; }
+  .date-step { width:27px; }
+  .date-today { min-width:56px; }
+  .progress { gap:9px; margin-top:12px; color:#777263; font-size:10px; }
+  .bar { height:3px; background:#e8e1cc; }
+  .bar span { background:#89977a; }
+  .task-list { padding:5px 16px 0; }
+  .task { gap:9px; padding:10px 1px; border-bottom:1px solid #eee8d7; }
+  .check {
+    flex-basis:16px;
+    width:16px;
+    height:16px;
+    margin:2px 0 0;
+    border:1.4px solid #aaa58f;
+    background:#fffdf5;
+  }
+  .check:checked { border-color:#71856d; background:#71856d; }
+  .check:checked:after { left:50%; top:48%; width:4px; height:7px; }
+  .task-text { color:var(--task-text-color); font-size:12.5px; line-height:1.5; }
+  .task.done .task-text { opacity:.62; }
+  .note.text-color-scope-major .title,
+  .note.text-color-scope-major .subtitle,
+  .note.text-color-scope-major .progress,
+  .note.text-color-scope-major .completed summary,
+  .note.text-color-scope-major .empty-hint,
+  .note.text-color-scope-major .note-empty-content,
+  .note.text-color-scope-major .focus-task-title,
+  .note.text-color-scope-major .focus-plan-label,
+  .note.text-color-scope-major .focus-time,
+  .note.text-color-scope-major .focus-caption,
+  .note.text-color-scope-major .focus-status { color:var(--task-text-color); }
+  .priority {
+    padding:2px 6px;
+    border-radius:4px;
+    background:#f0ecd9;
+    color:#77715f;
+    font-size:9px;
+    line-height:1.4;
+  }
+  .priority.high { background:#f5e5dc; color:#98644e; }
+  .completed { margin:6px 16px 0; border-top:1px solid #e9e2cb; }
+  .completed summary { padding:11px 1px; color:#6e6a5e; font-size:10.5px; }
+  .completed summary:before { color:#78866e; }
+  .count { color:#827c6b; }
+  .completed .task { padding:8px 1px; }
+  .foot { padding:9px 17px 12px; color:#817b6b; font-size:10px; }
+  .more-menu,.personalize-panel {
+    border-color:#e9e2cf;
+    border-radius:9px;
+    background:#fffdf5;
+    box-shadow:0 8px 22px #403a291c;
+    transform:none;
+  }
+  .menu-item { border-radius:6px; color:#464339; font-size:11.5px; }
+  .menu-item:hover { background:#f3efdf; }
+  .menu-item:disabled { color:#aaa696; }
+  .menu-separator { background:#eee9da; }
+  .personalize-panel { color:#454239; }
+  .personalize-head { color:#3f3b31; }
+  .personalize-close { width:24px; height:24px; border-radius:6px; }
+  .personalize-close:hover { background:#f3efdf; }
+  .setting-label { color:#6e6a5e; }
+  .select-wrap:after { border-color:#777263; }
+  .setting select,.dialog input[type=url] {
+    border-color:#ded8c6;
+    border-radius:6px;
+    background:#fffefa;
+    color:#403d34;
+  }
+  .setting select:focus,.dialog input[type=url]:focus { border-color:#85947b; outline:none; box-shadow:0 0 0 2px #85947b22; }
+  .upload-button { border-color:#c9c3ad; border-radius:6px; color:#5f6758; }
+  .upload-button:hover { background:#f7f3e6; }
+  .dialog-backdrop { background:#302e2745; }
+  .dialog {
+    padding:20px;
+    border-color:#e8e1ce;
+    border-radius:12px;
+    background:#fffdf6;
+    box-shadow:0 16px 42px #24211838;
+    transform:none;
+  }
+  .dialog h2 { color:#3f3b31; font-size:15px; }
+  .dialog p { color:#716d61; font-size:11px; line-height:1.55; }
+  .dialog-button { border-color:#ded9ca; border-radius:6px; color:#514e43; background:#f7f5ed; }
+  .dialog-button:hover { background:#eeece1; }
+  .dialog-button.primary { border-color:#6f846e; background:#6f846e; }
+  .dialog-button.primary:hover { border-color:#5e745e; background:#5e745e; }
+  .field-mapping { display:none; max-height:260px; overflow:auto; margin-top:10px; padding:10px; border:1px solid #e8e3d6; border-radius:8px; background:#fbfaf5; }
+  .field-mapping.open { display:grid; gap:9px; }
+  .field-row { display:grid; grid-template-columns:90px 1fr; align-items:center; gap:8px; color:#706d62; font-size:11px; }
+  .field-row select { width:100%; min-width:0; height:30px; padding:0 8px; border:1px solid #ded8c6; border-radius:6px; color:#403d34; background:#fffefa; font:11px -apple-system,sans-serif; }
+  .field-row select:focus { border-color:#85947b; outline:none; box-shadow:0 0 0 2px #85947b22; }
+  .field-note { color:#858174; font-size:10px; line-height:1.5; }
+  .empty-hint { padding:12px 2px; color:#8c887b; font-size:11px; text-align:center; }
+  .notebook-entry { border-color:#e9e3d3; border-radius:7px; background:#fffefa; }
+  .notebook-entry strong { color:#454239; }
+  .notebook-entry button,.link { color:#617a64; }
+  .note-empty { color:#716d61; }
+  .note-empty-content { max-width:230px; color:#5c5a50; font-size:13px; line-height:1.65; }
+  .note-empty-hint,.empty-hint { color:#7f7b6f; }
+  .toast { border-radius:7px; background:#37362f; box-shadow:0 5px 16px #24211830; }
+  .resize-handle.n,.resize-handle.s { cursor:ns-resize; }
+  @media(max-width:700px) {
+    .desktop { border-radius:0; box-shadow:none; }
+    .note { border-radius:14px; }
+  }
+  .date-switcher { gap:0; }
+  .calendar-open { margin-right:7px; border-radius:7px!important; }
+  .calendar-page { display:none; width:100%; min-height:0; flex:1; flex-direction:column; }
+  .note.is-calendar .note-empty { display:flex; flex:1; min-height:0; padding:12px 15px 14px; align-items:stretch; justify-content:flex-start; text-align:left; }
+  .note.is-calendar #active-list,.note.is-calendar .completed,.note.is-calendar .foot,.note.is-calendar .progress,.note.is-calendar .date-switcher { display:none!important; }
+  .note.is-calendar #calendar-page { display:flex; }
+  .note.is-calendar:not(.is-empty) .title { display:block; }
+  .note.is-calendar:not(.is-empty) .title-row { justify-content:space-between; }
+  .note.is-calendar .calendar-onboarding { display:none; }
+  .note.is-empty.is-calendar .calendar-onboarding { display:flex; }
+  .note.is-calendar .closed-note-content { display:none; }
+  .calendar-month-nav { display:flex; height:28px; flex:0 0 auto; align-items:center; gap:7px; }
+  .calendar-month-title { flex:1; color:#454239; font-size:13px; font-weight:620; text-align:center; }
+  .calendar-month-step,.calendar-today { display:grid; place-items:center; height:27px; border:1px solid #e7e0cc; border-radius:7px; color:#5a574d; background:#fff9e8; font:14px/1 -apple-system,BlinkMacSystemFont,sans-serif; cursor:pointer; }
+  .calendar-month-step { width:27px; font-size:19px; }
+  .calendar-month-step:hover,.calendar-today:hover { background:#f5efd9; }
+  .calendar-today { padding:0 9px; font-size:10px; }
+  .calendar-weekdays,.calendar-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); align-items:center; text-align:center; }
+  .calendar-weekdays { height:22px; flex:0 0 auto; color:#8c8675; font-size:9px; }
+  .calendar-grid { grid-auto-rows:minmax(28px,1fr); flex:1 1 auto; min-height:168px; }
+  .calendar-day { justify-self:center; display:grid; place-items:center; width:28px; height:28px; padding:0; border:0; border-radius:50%; color:#514d42; background:transparent; font:11px -apple-system,BlinkMacSystemFont,sans-serif; cursor:pointer; }
+  .calendar-day:hover { background:#f1ebd5; }
+  .calendar-day.is-adjacent { color:#b0aa98; }
+  .calendar-day.is-today { box-shadow:inset 0 0 0 1px #9ba78c; }
+  .calendar-day.is-selected { color:#fffdf5; background:#71856d; font-weight:650; }
+  .calendar-day.is-selected.is-today { box-shadow:inset 0 0 0 1px #71856d,0 0 0 2px #71856d35; }
+  .calendar-onboarding { display:none; flex:0 0 auto; justify-content:center; padding-top:7px; }
+  .calendar-onboarding .auth-empty { width:100%; max-width:none; gap:0; }
+  .calendar-onboarding .auth-mark,.calendar-onboarding .auth-description { display:none; }
+  .calendar-onboarding .auth-title { max-width:100%; font-size:11px; line-height:1.4; text-align:center; }
+  .calendar-onboarding .auth-account { margin:2px 0 5px; font-size:9px; }
+  .calendar-onboarding .auth-primary { min-width:132px; min-height:30px; margin-top:6px; font-size:10px; }
+  .calendar-onboarding .auth-status { min-height:12px; margin:2px 0 0; font-size:9px; }
+  @media(max-height:340px) {
+    .note.is-calendar .note-empty { padding-top:7px; padding-bottom:7px; }
+    .calendar-grid { grid-auto-rows:25px; min-height:150px; }
+    .calendar-day { width:24px; height:24px; }
+    .calendar-onboarding { padding-top:3px; }
+    .calendar-onboarding .auth-primary { min-height:26px; margin-top:3px; }
+  }
+</style>
+</head>
+<body>
+  <main class="desktop" aria-label="桌面浮窗原型">
+    <section class="note is-empty is-calendar" id="note">
+      <header class="note-head" id="drag-handle">
+        <div class="drag"><i></i></div>
+        <div class="title-row">
+          <div class="title-meta"><div class="title" id="note-title">今日待办</div><span class="network-indicator" id="network-indicator" role="img" aria-label="网络正常" title="已连接，网络正常"></span></div>
+          <div class="actions" aria-label="便签操作">
+            <button class="icon add-note-icon" id="add-note" title="新建" aria-label="新建" aria-haspopup="menu" aria-expanded="false">+</button>
+            <div class="add-menu" id="add-menu" role="menu" aria-label="新建">
+              <button class="menu-item" id="new-task-button" type="button" role="menuitem" disabled>新建条目</button>
+              <button class="menu-item" id="new-note-button" type="button" role="menuitem">新建便签</button>
+            </div>
+            <button class="icon" id="more-button" title="更多" aria-label="更多"><span class="ellipsis-mark" aria-hidden="true"><i></i><i></i><i></i></span></button>
+            <div class="more-menu" id="more-menu">
+              <div class="menu-group-wrap" id="menu-window-group">
+                <button class="menu-item menu-group" type="button" aria-expanded="false"><span>窗口</span><span class="submenu-chevron" aria-hidden="true">‹</span></button>
+                <div class="menu-submenu">
+                  <button class="menu-item" onclick="togglePin()"><span id="pin-label">置顶</span></button>
+                  <button class="menu-item" onclick="refresh()">刷新</button>
+                  <button class="menu-item" onclick="hideTodoWindow()">隐藏</button>
+                </div>
+              </div>
+              <div class="menu-group-wrap" id="menu-notes-group">
+                <button class="menu-item menu-group" type="button" aria-expanded="false"><span>便签管理</span><span class="submenu-chevron" aria-hidden="true">‹</span></button>
+                <div class="menu-submenu">
+                  <button class="menu-item" id="open-notebook">便签夹</button>
+                  <button class="menu-item" id="manage-fixed-tasks">固定事项…</button>
+                  <button class="menu-item" id="close-current-page" onclick="closeCurrentPage()">关闭当前页</button>
+                  <button class="menu-item" id="delete-note-button" onclick="deleteCurrentNote()" disabled>删除便签</button>
+                </div>
+              </div>
+              <div class="menu-group-wrap" id="menu-appearance-group">
+                <button class="menu-item menu-group" type="button" aria-expanded="false"><span>外观</span><span class="submenu-chevron" aria-hidden="true">‹</span></button>
+                <div class="menu-submenu"><button class="menu-item" id="personalize-button">个性化…</button></div>
+              </div>
+              <div class="menu-group-wrap" id="menu-account-group">
+                <button class="menu-item menu-group" type="button" aria-expanded="false"><span>飞书账号</span><span class="submenu-chevron" aria-hidden="true">‹</span></button>
+                <div class="menu-submenu">
+                  <button class="menu-item" id="configure-feishu-credentials">应用凭证…</button>
+                  <button class="menu-item" id="logout-feishu">退出登录</button>
+                </div>
+              </div>
+              <div class="menu-separator"></div>
+            </div>
+            <section class="personalize-panel" id="personalize-panel" aria-label="个性化设置">
+              <div class="personalize-head"><span>个性化</span><button class="personalize-close" id="personalize-close" aria-label="关闭">×</button></div>
+              <div class="setting"><span class="setting-label">背景图片</span><span class="background-actions"><span class="upload-button">选择图片<input class="file-input" id="background-upload" type="file" accept="image/*"></span><button class="background-remove" id="clear-background" type="button" disabled>移除</button></span></div>
+              <label class="setting"><span class="setting-label">纸面透明度 <span id="opacity-value">100%</span></span><input id="opacity-range" type="range" min="35" max="100" value="100"></label>
+              <label class="setting"><span class="setting-label">中文字体</span><span class="select-wrap"><select id="font-cn"><option value="PingFang SC">苹方</option><option value="Songti SC">宋体</option><option value="Kaiti SC">楷体</option><option value="system-ui">系统字体</option></select></span></label>
+              <label class="setting"><span class="setting-label">英文字体</span><span class="select-wrap"><select id="font-en"><option value="-apple-system">SF 系统字体</option><option value="Georgia">Georgia</option><option value="Helvetica Neue">Helvetica Neue</option><option value="Menlo">Menlo</option></select></span></label>
+              <div class="setting"><span class="setting-label">文字颜色应用到</span><span class="select-wrap"><select id="text-color-scope"><option value="task">任务内容</option><option value="major">主要文字（任务、标题、说明）</option></select></span></div>
+              <div class="setting"><span class="setting-label">文字颜色</span><div class="text-color-options" id="text-color-options">
+                <button class="text-color-swatch" type="button" data-color="#454239" aria-label="深灰" style="background:#454239"></button>
+                <button class="text-color-swatch" type="button" data-color="#6B6252" aria-label="棕灰" style="background:#6B6252"></button>
+                <button class="text-color-swatch" type="button" data-color="#657A68" aria-label="苔绿" style="background:#657A68"></button>
+                <button class="text-color-swatch" type="button" data-color="#526C80" aria-label="灰蓝" style="background:#526C80"></button>
+                <button class="text-color-swatch" type="button" data-color="#8A5148" aria-label="砖红" style="background:#8A5148"></button>
+                <button class="text-color-swatch" type="button" data-color="#7A5B83" aria-label="灰紫" style="background:#7A5B83"></button>
+                <input class="text-color-custom" id="text-color-custom" type="color" value="#454239" aria-label="自定义文字颜色">
+              </div></div>
+              <div class="setting"><span class="setting-label">文字样式</span><div class="text-style-toggles"><button class="text-style-toggle" id="text-bold-toggle" type="button" aria-label="粗体" aria-pressed="false"><strong>B</strong></button><button class="text-style-toggle" id="text-italic-toggle" type="button" aria-label="斜体" aria-pressed="false"><em>I</em></button><button class="text-style-reset" id="reset-text-style" type="button">恢复默认</button></div></div>
+              <div class="setting"><span class="setting-label">预览</span><div class="style-preview" id="text-style-preview">整理今日待办 · Todo example</div><div class="contrast-warning" id="contrast-warning" role="status">文字颜色与纸面反差较低，建议调整颜色或透明度。</div></div>
+            </section>
+            <section class="personalize-panel fixed-task-panel" id="fixed-task-panel" aria-label="固定事项管理">
+              <div class="personalize-head"><span>固定事项</span><button class="personalize-close" id="fixed-task-close" aria-label="关闭">×</button></div>
+              <p class="fixed-task-intro">保存在本机；添加后写入当前便签对应的视图。</p>
+              <div class="fixed-task-list" id="fixed-task-list"></div>
+              <button class="fixed-task-show-form" id="fixed-task-show-form" type="button">添加固定事项</button>
+              <form class="fixed-task-form" id="fixed-task-form" hidden>
+                <input id="fixed-task-name" type="text" maxlength="500" placeholder="任务内容" required>
+                <select id="fixed-task-priority" required><option value="">选择优先级</option></select>
+                <input id="fixed-task-duration" type="number" min="0.5" step="0.5" placeholder="计划时长（小时，可选）" hidden>
+                <div class="fixed-task-form-actions"><button class="secondary" id="fixed-task-edit-cancel" type="button" hidden>取消</button><button id="fixed-task-add" type="submit" disabled>添加固定事项</button></div>
+              </form>
+              <div class="fixed-task-error" id="fixed-task-error" role="status"></div>
+            </section>
+          </div>
+        </div>
+        <div class="date-switcher" id="date-switcher" role="group" aria-label="切换待办日期">
+          <button class="date-step calendar-open" id="open-calendar" type="button" title="打开月历" aria-label="打开月历"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="4" width="11" height="9.5" rx="1.5"/><path d="M5 2.5v3M11 2.5v3M2.5 7h11"/></svg></button>
+          <button class="date-step" id="previous-day" type="button" title="前一天" aria-label="前一天"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10 3-5 5 5 5"/></svg></button>
+          <button class="date-today" id="return-today" type="button" title="返回今天">今天</button>
+          <button class="date-step" id="next-day" type="button" title="后一天" aria-label="后一天"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg></button>
+        </div>
+        <div class="progress"><span id="progress-label">1 / 4 完成</span><div class="bar"><span id="progress-bar"></span></div><button class="icon open-source-progress" id="open-source-progress" type="button" title="在飞书中打开视图" aria-label="在飞书中打开视图">↗</button></div>
+        <details class="projection-warning" id="projection-warning" hidden><summary id="projection-warning-summary"></summary><ul class="projection-warning-list" id="projection-warning-list"></ul></details>
+      </header>
+
+      <div class="note-empty" id="empty-note-content">
+        <section class="calendar-page" id="calendar-page" aria-label="按月选择日期">
+          <div class="calendar-month-nav">
+            <button class="calendar-month-step" id="previous-month" type="button" aria-label="上个月" title="上个月">‹</button>
+            <strong class="calendar-month-title" id="calendar-month-title"></strong>
+            <button class="calendar-month-step" id="next-month" type="button" aria-label="下个月" title="下个月">›</button>
+            <button class="calendar-today" id="calendar-today" type="button">今天</button>
+          </div>
+          <div class="calendar-weekdays" aria-hidden="true"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+          <div class="calendar-grid" id="calendar-grid" role="grid" aria-label="日期"></div>
+          <div class="calendar-onboarding" id="calendar-onboarding">
+        <div class="note-empty-content auth-empty" id="auth-empty" aria-live="polite" aria-atomic="true">
+          <span class="auth-mark" aria-hidden="true">
+            <svg viewBox="0 0 20 20"><path d="M7.2 12.8 5.8 14.2a3.1 3.1 0 0 1-4.4-4.4l3.2-3.2a3.1 3.1 0 0 1 4.4 0"/><path d="m12.8 7.2 1.4-1.4a3.1 3.1 0 1 1 4.4 4.4l-3.2 3.2a3.1 3.1 0 0 1-4.4 0"/><path d="m7.3 12.7 5.4-5.4"/></svg>
+          </span>
+          <h1 class="auth-title" id="auth-title"></h1>
+          <p class="auth-description" id="auth-description">授权后，选择一个多维表格视图贴到桌面。</p>
+          <p class="auth-account" id="auth-account" hidden></p>
+          <button class="auth-primary" id="auth-action" type="button">连接飞书账号</button>
+          <p class="auth-status" id="auth-status" role="status"></p>
+        </div>
+          </div>
+        </section>
+        <div class="note-empty-content closed-note-content" id="closed-note-content" hidden>
+          <strong>便签已关闭</strong>
+          <span>已绑定的视图仍保留在便签夹中。</span>
+          <button class="auth-primary" id="closed-open-notebook" type="button">打开便签夹</button>
+        </div>
+      </div>
+
+      <div class="task-list" id="active-list">
+        <label class="task"><input class="check" type="checkbox" onchange="completeTask(this)"><span class="task-text">确认首页改版的最终文案</span><span class="priority high">高</span></label>
+        <label class="task"><input class="check" type="checkbox" onchange="completeTask(this)"><span class="task-text">完成周会材料并同步给团队</span><span class="priority high">高</span></label>
+        <label class="task"><input class="check" type="checkbox" onchange="completeTask(this)"><span class="task-text">检查多维表格视图字段配置</span><span class="priority">中</span></label>
+        <label class="task"><input class="check" type="checkbox" onchange="completeTask(this)"><span class="task-text">整理本周用户反馈</span><span class="priority">低</span></label>
+      </div>
+
+      <details class="completed" id="completed-list">
+        <summary><span class="summary-left">已完成</span><span class="count" id="done-count">1 项</span></summary>
+        <div class="task-list">
+          <label class="task done"><input class="check" type="checkbox" checked onchange="undoTask(this)"><span class="task-text">整理昨天的需求评审记录</span><span class="priority">中</span></label>
+        </div>
+        <div class="completed-scroll-track" id="completed-scroll-track" aria-hidden="true"><div class="completed-scroll-thumb" id="completed-scroll-thumb"></div></div>
+      </details>
+      <section class="focus-panel" id="focus-panel" aria-label="番茄钟">
+        <h2 class="focus-task-title" id="focus-task-title"></h2>
+        <div class="focus-plan-label" id="focus-plan-label"></div>
+        <div class="focus-clock" aria-label="专注进度">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <circle class="focus-ring plan-track" cx="60" cy="60" r="53"></circle>
+            <circle class="focus-ring plan-progress" id="focus-plan-ring" cx="60" cy="60" r="53"></circle>
+            <circle class="focus-ring round-track" cx="60" cy="60" r="42"></circle>
+            <circle class="focus-ring round-progress" id="focus-round-ring" cx="60" cy="60" r="42"></circle>
+          </svg>
+          <div class="focus-clock-center"><strong class="focus-time" id="focus-total-time">00:00</strong><span class="focus-caption" id="focus-round-caption">累计专注</span></div>
+        </div>
+        <div class="focus-status" id="focus-status" aria-live="polite"></div>
+        <div class="focus-actions">
+          <button class="focus-action" id="focus-back" type="button">返回待办</button>
+          <button class="focus-action primary" id="focus-toggle" type="button">开始专注</button>
+          <button class="focus-action" id="focus-settings-toggle" type="button" aria-expanded="false">时长设置</button>
+        </div>
+        <div class="focus-settings" id="focus-settings" hidden>
+          <label>工作（分钟）<input id="focus-work-minutes" type="number" min="1" max="120" step="1"></label>
+          <label>短休息（分钟）<input id="focus-short-minutes" type="number" min="1" max="60" step="1"></label>
+          <label>长休息（分钟）<input id="focus-long-minutes" type="number" min="1" max="90" step="1"></label>
+          <label>每几轮长休息<input id="focus-long-every" type="number" min="2" max="8" step="1"></label>
+          <button id="focus-save-settings" type="button">保存设置</button>
+        </div>
+      </section>
+      <span class="resize-handle n" data-edge="n" aria-hidden="true"></span>
+      <span class="resize-handle e" data-edge="e" aria-hidden="true"></span>
+      <span class="resize-handle s" data-edge="s" aria-hidden="true"></span>
+      <span class="resize-handle w" data-edge="w" aria-hidden="true"></span>
+      <span class="resize-handle ne" data-edge="ne" aria-hidden="true"></span>
+      <span class="resize-handle nw" data-edge="nw" aria-hidden="true"></span>
+      <span class="resize-handle se" data-edge="se" aria-hidden="true"></span>
+      <span class="resize-handle sw" data-edge="sw" aria-hidden="true"></span>
+    </section>
+    <div class="dialog-backdrop" id="bind-dialog"><form class="dialog" id="bind-form"><h2>绑定一个视图</h2><input id="view-url" type="url" placeholder="https://xxx.feishu.cn/base/...?table=...&view=..." autocomplete="url"><div class="field-mapping" id="field-mapping"></div><div class="dialog-error" id="bind-error"></div><div class="dialog-actions"><button type="button" class="dialog-button" id="bind-cancel">取消</button><button type="submit" class="dialog-button primary" id="bind-submit">读取视图字段</button></div></form></div>
+    <div class="dialog-backdrop" id="task-dialog"><form class="dialog task-create-dialog" id="task-form"><h2 id="task-dialog-title">新建条目</h2><label class="task-create-field" for="task-title-input">待办内容<input id="task-title-input" type="text" maxlength="500" placeholder="输入待办内容" required></label><label class="task-create-field" for="task-priority-select">优先级<select id="task-priority-select" required><option value="">选择优先级</option></select></label><label class="task-create-field" id="task-planned-duration-field" for="task-planned-duration" hidden>计划时长（小时，可选）<input id="task-planned-duration" type="number" min="0.5" step="0.5" placeholder="例如 1.5"></label><div class="task-create-field" id="task-date-field"><span>所属日期</span><div class="task-create-date" id="task-create-date"></div></div><div class="task-create-error" id="task-create-error" role="status"></div><div class="dialog-actions"><button type="button" class="dialog-button" id="task-cancel">取消</button><button type="submit" class="dialog-button primary" id="task-submit" disabled>创建</button></div></form></div>
+    <div class="dialog-backdrop" id="notebook-dialog"><section class="dialog"><h2>便签夹</h2><div class="notebook-list" id="notebook-list"></div><div class="dialog-actions"><button class="dialog-button" id="notebook-close">关闭</button></div></section></div>
+    <div class="toast" id="toast"></div>
+  </main>
+<script>
+  let timer;
+  // 独立 HTML 仍用于原型预览；macOS 应用的绑定状态由原生宿主响应。
+  const nativeHostAvailable=Boolean(window.webkit?.messageHandlers?.todoHost);
+  const pendingNativeRequests=new Map();
+  let pendingViewURL='';
+  let bindingInspection=null;
+  let nativeTodoItems=[];
+  let nativeProjectionIssues=[];
+  let nativeSnapshotStale=false;
+  let nativeHasSnapshot=false;
+  let nativeLoadError='';
+  let activeNotePreferences={opacity:100,fontCN:'PingFang SC',fontEN:'-apple-system',textColor:'#454239',textColorScope:'task',textBold:false,textItalic:false,fixedTasks:[]};
+  let fixedPriorityOptions=[];
+  let fixedPlannedDurationAvailable=false;
+  let selectedDateKey=localDateKey(new Date());
+  let calendarMonthDate=new Date(new Date().getFullYear(),new Date().getMonth(),1);
+  let prototypeTaskMarkup=null;
+  let opacitySaveTimer=null;
+  const nativeCompletionQueues=new Map();
+  const deletingTaskKeys=new Set();
+  const pendingCompletionStorageKey='todo.pending-completions.v2';
+  const legacyPendingCompletionStorageKey='todo.pending-completions.v1';
+  let legacyPendingCompletions=[];
+  let legacyQueuePrompted=false;
+  let activeAccountKey='';
+  let networkUnavailable=!navigator.onLine;
+  let completionRetryTimer=null;
+  const completionQueueKey=(accountKey,bindingId,recordId)=>`${accountKey}|${bindingId}|${recordId}`;
+  try{for(const item of JSON.parse(localStorage.getItem(pendingCompletionStorageKey)||'[]')){if(item.accountKey&&item.bindingId&&item.recordId)nativeCompletionQueues.set(completionQueueKey(item.accountKey,item.bindingId,item.recordId),{...item,running:false,snapshot:null});else if(item.bindingId&&item.recordId)legacyPendingCompletions.push(item);}}catch{}
+  try{for(const item of JSON.parse(localStorage.getItem(legacyPendingCompletionStorageKey)||'[]')){if(item.bindingId&&item.recordId)legacyPendingCompletions.push(item);}}catch{}
+  function persistPendingCompletions(){try{localStorage.setItem(pendingCompletionStorageKey,JSON.stringify([...nativeCompletionQueues.values()].map(({accountKey,bindingId,recordId,confirmed,desired,blocked,blockedReason})=>({accountKey,bindingId,recordId,confirmed,desired,blocked:Boolean(blocked),blockedReason:blockedReason||null}))))}catch{}}
+  function activateAccount(accountKey){activeAccountKey=typeof accountKey==='string'?accountKey:'';for(const queue of nativeCompletionQueues.values())if(queue.accountKey===activeAccountKey&&['account','auth'].includes(queue.blockedReason)){queue.blocked=false;queue.blockedReason=null;}persistPendingCompletions();networkUnavailable=!navigator.onLine||hasActiveAccountPending();if(activeAccountKey&&legacyPendingCompletions.length&&!legacyQueuePrompted){legacyQueuePrompted=true;const discard=window.confirm(`发现 ${legacyPendingCompletions.length} 条旧版本离线状态，无法确认它们属于哪个飞书账号。为避免误写回，这些操作不会自动执行。\n\n选择“好”永久清除；选择“取消”则保留，但仍不会写回。`);if(discard){legacyPendingCompletions=[];localStorage.removeItem(legacyPendingCompletionStorageKey);persistPendingCompletions();notify('已清除无法确认账号的旧离线操作');}else{notify('旧离线操作已隔离，不会自动写回');}}}
+  function hasActiveAccountPending(){return [...nativeCompletionQueues.values()].some(item=>item.accountKey===activeAccountKey);}
+  function pendingForBinding(bindingID){return [...nativeCompletionQueues.values()].filter(item=>item.accountKey===activeAccountKey&&item.bindingId===bindingID);}
+  function discardPendingForBinding(bindingID){for(const [key,item] of nativeCompletionQueues){if(item.accountKey===activeAccountKey&&item.bindingId===bindingID)nativeCompletionQueues.delete(key);}persistPendingCompletions();}
+  function reconcilePendingCompletions(accountKey,bindingID,snapshot){
+    if(snapshot?.stale)return;
+    let changed=false;
+    const records=new Map((snapshot?.items||[]).map(item=>[item.id,item]));
+    for(const [key,queue] of nativeCompletionQueues){
+      if(queue.accountKey!==accountKey||queue.bindingId!==bindingID||queue.running)continue;
+      const record=records.get(queue.recordId);
+      if(!record){queue.blocked=true;queue.blockedReason='record-not-in-view';changed=true;continue;}
+      if(Boolean(record.isDone)===Boolean(queue.desired)){nativeCompletionQueues.delete(key);changed=true;continue;}
+      queue.confirmed=Boolean(record.isDone);queue.blocked=false;queue.blockedReason=null;changed=true;
+    }
+    if(changed)persistPendingCompletions();
+  }
+  function updateNetworkIndicator(){const indicator=document.getElementById('network-indicator');if(!indicator)return;const offline=networkUnavailable||!navigator.onLine||nativeSnapshotStale;indicator.classList.toggle('is-offline',offline);indicator.title=offline?'网络异常，状态暂存在本机，恢复后自动写回':'已连接，网络正常';indicator.setAttribute('aria-label',offline?'网络异常，状态待同步':'网络正常');}
+  function isNetworkFailure(error){return !navigator.onLine||error?.code==='NETWORK_UNAVAILABLE'||error?.code==='MUTATION_OUTCOME_UNKNOWN';}
+  function scheduleCompletionRetry(){clearTimeout(completionRetryTimer);completionRetryTimer=setTimeout(flushPendingCompletions,15000)}
+  window.addEventListener('offline',()=>{networkUnavailable=true;updateNetworkIndicator();refreshCreateAvailability()});
+  window.addEventListener('online',()=>{if(hasActiveAccountPending()){networkUnavailable=true;updateNetworkIndicator();flushPendingCompletions()}else{networkUnavailable=false;updateNetworkIndicator()}refreshCreateAvailability()});
+  updateNetworkIndicator();
+  window.__todoNativeReceive=response=>{
+    const pending=pendingNativeRequests.get(response.requestId);
+    if(!pending)return;
+    pendingNativeRequests.delete(response.requestId);
+    if(response.ok)pending.resolve(response.result||{});
+    else pending.reject(Object.assign(new Error(response.error?.message||'桌面操作失败。'),{code:response.error?.code||'NATIVE_ERROR'}));
+  };
+  function nativeRequest(method,params={}){
+    return new Promise((resolve,reject)=>{
+      const requestId=window.crypto?.randomUUID?window.crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      pendingNativeRequests.set(requestId,{resolve,reject});
+      window.webkit.messageHandlers.todoHost.postMessage({protocolVersion:1,requestId,method,params});
+    });
+  }
+  let authState='unconnected', authDisplayName='', authErrorMessage='';
+  function renderAuthState(){
+    const panel=document.getElementById('auth-empty');
+    const title=document.getElementById('auth-title');
+    const description=document.getElementById('auth-description');
+    const account=document.getElementById('auth-account');
+    const action=document.getElementById('auth-action');
+    const status=document.getElementById('auth-status');
+    document.getElementById('note').classList.toggle('is-authenticated',authState==='connected');
+    panel.classList.toggle('is-authorizing',authState==='authorizing');
+    panel.classList.toggle('is-error',authState==='error');
+    account.hidden=authState!=='connected';
+    status.textContent='';
+    action.disabled=authState==='authorizing';
+    if(authState==='connected'){
+      title.textContent='飞书账号已连接';
+      description.textContent='';
+      description.hidden=true;
+      account.textContent=`当前账号：${authDisplayName||'飞书用户'}`;
+      action.textContent='绑定多维表格';
+    }else if(authState==='authorizing'){
+      title.textContent='正在连接飞书';
+      description.textContent='请在浏览器中的飞书页面完成授权，完成后会自动返回 Todo。';
+      description.hidden=false;
+      action.textContent='等待授权完成…';
+    }else if(authState==='error'){
+      title.textContent='连接失败';
+      description.textContent='请检查浏览器中的授权结果，或重新连接。';
+      description.hidden=false;
+      action.textContent='重新连接飞书';
+      status.textContent=authErrorMessage||'授权已取消或暂时无法完成。';
+    }else{
+      title.textContent='';
+      description.textContent='连接飞书后绑定一个视图。';
+      description.hidden=false;
+      action.textContent='连接飞书账号';
+    }
+    refreshCreateAvailability();
+  }
+  function startFeishuAuthorization(){
+    if(authState==='authorizing')return;
+    document.getElementById('more-menu').classList.remove('open');
+    authState='authorizing';authErrorMessage='';renderAuthState();
+    if(nativeHostAvailable){
+      nativeRequest('auth.start').catch(error=>{authState='error';authErrorMessage=error.message;renderAuthState();});
+      return;
+    }
+    // 独立 HTML 的预览模拟：展示完整的授权中与授权成功状态，不会调用真实飞书接口。
+    window.setTimeout(()=>{authState='connected';authDisplayName='示例飞书账号';renderAuthState();toast('原型演示：飞书账号已连接');},1200);
+  }
+  window.__todoNativeEvent=message=>{
+    const payload=message?.payload||{};
+    if(message?.event==='auth.started'){authState='authorizing';renderAuthState();}
+    if(message?.event==='auth.completed'){activateAccount(payload.accountKey);authState='connected';authDisplayName=payload.displayName||'飞书用户';authErrorMessage='';renderAuthState();restoreNativeNotebook().then(flushPendingCompletions).catch(error=>toast(error.message));}
+    if(message?.event==='auth.failed'){authState='error';authErrorMessage=payload.message||'';renderAuthState();}
+    if(message?.event==='auth.signedOut'){activeAccountKey='';networkUnavailable=!navigator.onLine;authState='unconnected';authDisplayName='';replaceNotebookItems([],null);nativeTodoItems=[];nativeHasSnapshot=false;nativeSnapshotStale=false;nativeLoadError='';nativeProjectionIssues=[];document.getElementById('note').classList.add('is-empty','is-calendar');document.getElementById('empty-note-content').hidden=false;document.getElementById('auth-empty').hidden=false;document.getElementById('closed-note-content').hidden=true;renderAuthState();renderCalendar();updateNetworkIndicator();}
+  };
+  document.getElementById('auth-action').addEventListener('click',()=>{
+    if(authState==='connected')showBindDialog();
+    else startFeishuAuthorization();
+  });
+  const localNotebook=[];
+  let activeBindingId=null;
+  let taskOptionsLoading=false;
+  let taskSubmitting=false;
+  let taskCreateClientToken=null;
+  let plannedDurationAvailable=false;
+  let taskOptionsCache=null;
+  let taskOptionsRequest=null;
+  let inlineTaskEditState=null;
+  let inlineTaskSaving=false;
+  let focusCurrentTask=null;
+  let focusState=null;
+  function refreshCreateAvailability(){
+    const canWrite=nativeHostAvailable&&authState==='connected'&&Boolean(activeBindingId)&&navigator.onLine&&!networkUnavailable;
+    const button=document.getElementById('new-task-button');
+    if(button)button.disabled=!(canWrite&&!taskOptionsLoading&&!taskSubmitting);
+    const submit=document.getElementById('task-submit');
+    const durationValue=document.getElementById('task-planned-duration')?.value;
+    const durationValid=!durationValue||(Number.isFinite(Number(durationValue))&&Number(durationValue)>=0.5&&Number(durationValue)*2===Math.round(Number(durationValue)*2));
+    if(submit)submit.disabled=!(canWrite&&!taskOptionsLoading&&!taskSubmitting&&Boolean(document.getElementById('task-priority-select')?.value)&&durationValid);
+    const cancel=document.getElementById('task-cancel');
+    if(cancel)cancel.disabled=taskSubmitting;
+  }
+  function updateDeleteAvailability(){const button=document.getElementById('delete-note-button');if(button)button.disabled=!activeBindingId;refreshCreateAvailability();}
+  function replaceNotebookItems(items,activeID){localNotebook.splice(0,localNotebook.length,...(items||[]));if(activeBindingId!== (activeID||null)){taskOptionsCache=null;taskOptionsRequest=null;plannedDurationAvailable=false;cancelInlineTaskEdit(false);}activeBindingId=activeID||null;updateDeleteAvailability();}
+  function resetFieldMapping(){bindingInspection=null;const panel=document.getElementById('field-mapping');panel.innerHTML='';panel.classList.remove('open');document.getElementById('bind-submit').textContent='读取视图字段';}
+  function showBindDialog(){if(authState!=='connected'){startFeishuAuthorization();return;}document.getElementById('add-menu').classList.remove('open');document.getElementById('add-note').setAttribute('aria-expanded','false');document.getElementById('more-menu').classList.remove('open');document.getElementById('bind-error').textContent='';resetFieldMapping();document.getElementById('view-url').value=nativeHostAvailable?pendingViewURL:'';document.getElementById('bind-dialog').classList.add('open');setTimeout(()=>document.getElementById('view-url').focus(),30);}
+  function renderFieldMapping(inspection){
+    bindingInspection=inspection;
+    const panel=document.getElementById('field-mapping');panel.innerHTML='';panel.classList.add('open');
+    const fields=inspection.fields||[];
+    const addSelect=(id,label,choices,placeholder)=>{
+      const row=document.createElement('label');row.className='field-row';const caption=document.createElement('span');caption.textContent=label;
+      const select=document.createElement('select');select.id=id;select.required=true;
+      const empty=document.createElement('option');empty.value='';empty.textContent=placeholder;select.append(empty);
+      choices.forEach(field=>{const option=document.createElement('option');option.value=field.id;option.textContent=field.name;select.append(option);});
+      row.append(caption,select);panel.append(row);return select;
+    };
+    const textFields=fields.filter(field=>field.type===1),dateFields=fields.filter(field=>field.type===5),singleFields=fields.filter(field=>field.type===3);
+    addSelect('map-task-field','任务内容',textFields,'选择文本字段');
+    addSelect('map-date-field','所属日期',dateFields,'选择日期字段');
+    addSelect('map-priority-field','优先级',singleFields,'选择单选字段');
+    const doneSelect=addSelect('map-done-field','完成状态',singleFields,'选择单选字段');
+    const optionRow=document.createElement('div');optionRow.className='field-row';const optionCaption=document.createElement('span');optionCaption.textContent='状态选项';
+    const optionWrap=document.createElement('div');optionWrap.style.display='grid';optionWrap.style.gridTemplateColumns='1fr 1fr';optionWrap.style.gap='6px';
+    const doneOption=document.createElement('select');doneOption.id='map-done-option';doneOption.required=true;const undoneOption=document.createElement('select');undoneOption.id='map-undone-option';undoneOption.required=true;
+    optionWrap.append(doneOption,undoneOption);optionRow.append(optionCaption,optionWrap);panel.append(optionRow);
+    const updateOptions=()=>{
+      doneOption.innerHTML='';undoneOption.innerHTML='';
+      const field=fields.find(item=>item.id===doneSelect.value);const options=field?.options||[];
+      [[doneOption,'已完成'],[undoneOption,'未完成']].forEach(([select,name])=>{const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=`选择${name}`;select.append(placeholder);options.filter(item=>item.name===name).forEach(item=>{const option=document.createElement('option');option.value=item.id;option.textContent=item.name;select.append(option);});});
+      if(options.some(item=>item.name==='已完成'))doneOption.value=options.find(item=>item.name==='已完成').id;
+      if(options.some(item=>item.name==='未完成'))undoneOption.value=options.find(item=>item.name==='未完成').id;
+    };
+    doneSelect.addEventListener('change',updateOptions);updateOptions();
+    const hint=document.createElement('div');hint.className='field-note';hint.textContent=`已读取视图“${inspection.viewName||'多维表格视图'}”的字段。请明确选择字段；任务顺序沿用飞书视图。`;panel.append(hint);
+    document.getElementById('bind-submit').textContent='建立便签';
+  }
+  function renderNotebook(entries=localNotebook){
+    const list=document.getElementById('notebook-list');list.innerHTML='';
+    if(!entries.length){list.innerHTML='<div class="empty-hint">还没有便签，点击 + 绑定一个视图。</div>';return;}
+    entries.forEach(entry=>{
+      const row=document.createElement('div');row.className='notebook-entry';
+      const info=document.createElement('div');info.className='notebook-entry-info';const title=document.createElement('strong');title.textContent=entry.name;title.title=entry.name;info.append(title);
+      const actions=document.createElement('div');actions.className='notebook-entry-actions';
+      const open=document.createElement('button');open.textContent=entry.id===activeBindingId?'当前便签':'打开';open.disabled=entry.id===activeBindingId;
+      open.addEventListener('click',async()=>{
+        if(focusCurrentTask)await leaveFocus();
+        if(nativeHostAvailable){open.disabled=true;open.textContent='正在验证…';try{
+          const result=await nativeRequest('notebook.open',{bindingId:entry.id});
+          replaceNotebookItems(entries,result.activeBindingId);nativeHasSnapshot=false;nativeTodoItems=[];nativeSnapshotStale=false;nativeLoadError='';
+          showBoundNote();applyNotePreferences(result.preferences);applyNativeSnapshot(result.snapshot);document.getElementById('notebook-dialog').classList.remove('open');if(result.warning)notify(result.warning);
+        }catch(error){open.disabled=false;open.textContent='打开';toast(`打开失败，当前便签未切换：${error.message}`);}return;}
+        if(!/^https:\/\/[\w.-]+\.feishu\.cn\/(base|wiki)\//i.test(entry.url)){toast('打开失败：视图链接无效');return;}
+        entry.open=true;activeBindingId=entry.id;showBoundNote();renderNotebook();document.getElementById('notebook-dialog').classList.remove('open');
+      });
+      const remove=document.createElement('button');remove.textContent='删除';
+      remove.addEventListener('click',()=>deleteBindingFromNotebook(entry.id));
+      actions.append(open,remove);row.append(info,actions);list.appendChild(row);
+    });
+  }
+  function renderAdditionalNoteCards(){document.querySelectorAll('.note-secondary').forEach(card=>card.remove());}
+  function showBoundNote(){const sticky=document.getElementById('note');sticky.hidden=false;sticky.classList.remove('is-empty','is-calendar');document.getElementById('empty-note-content').hidden=true;document.getElementById('closed-note-content').hidden=true;updateDateHeader();if(nativeHostAvailable){renderNativePage();const bindingID=activeBindingId;if(bindingID)loadTaskOptions(bindingID).then(()=>{if(activeBindingId===bindingID)renderNativePage();}).catch(()=>{});}else renderPrototypeDate();renderAdditionalNoteCards();updateDeleteAvailability();}
+  function showClosedNote(){const sticky=document.getElementById('note');sticky.hidden=false;sticky.classList.add('is-empty');sticky.classList.remove('is-calendar');sticky.style.setProperty('--paper-image','none');activeNotePreferences={...activeNotePreferences,backgroundImageData:null,fixedTasks:[]};nativeProjectionIssues=[];document.getElementById('empty-note-content').hidden=false;document.getElementById('auth-empty').hidden=true;document.getElementById('closed-note-content').hidden=false;document.getElementById('more-menu').classList.remove('open');document.getElementById('personalize-panel').classList.remove('open');document.getElementById('fixed-task-panel').classList.remove('open');updateDeleteAvailability();}
+  function showInitialEmptyState(){const sticky=document.getElementById('note');sticky.hidden=false;sticky.classList.add('is-empty','is-calendar');sticky.style.setProperty('--paper-image','none');activeNotePreferences={...activeNotePreferences,backgroundImageData:null,fixedTasks:[]};nativeTodoItems=[];nativeProjectionIssues=[];nativeHasSnapshot=false;nativeSnapshotStale=false;nativeLoadError='';document.getElementById('empty-note-content').hidden=false;document.getElementById('auth-empty').hidden=false;document.getElementById('closed-note-content').hidden=true;document.getElementById('more-menu').classList.remove('open');document.getElementById('personalize-panel').classList.remove('open');document.getElementById('fixed-task-panel').classList.remove('open');renderAuthState();renderCalendar();updateDeleteAvailability();}
+  async function restoreNativeNotebook(){if(!nativeHostAvailable)return;const notebook=await nativeRequest('notes.list');replaceNotebookItems(notebook.items||[],notebook.activeBindingId);if(activeBindingId){const active=localNotebook.find(item=>item.id===activeBindingId);if(active){showBoundNote();const result=await nativeRequest('notes.getPreferences',{bindingId:active.id});applyNotePreferences(result.preferences);if(active.snapshot)applyNativeSnapshot(active.snapshot);await refreshActiveNote();}else showClosedNote();}else if(localNotebook.length){showClosedNote();}else showInitialEmptyState();}
+  const addButton=document.getElementById('add-note');
+  const addMenu=document.getElementById('add-menu');
+  const taskDialog=document.getElementById('task-dialog');
+  const taskForm=document.getElementById('task-form');
+  const taskTitleInput=document.getElementById('task-title-input');
+  const taskPrioritySelect=document.getElementById('task-priority-select');
+  const taskSubmitButton=document.getElementById('task-submit');
+  async function loadTaskOptions(bindingID){
+    if(taskOptionsCache?.bindingID===bindingID)return taskOptionsCache;
+    if(taskOptionsRequest?.bindingID===bindingID)return taskOptionsRequest.promise;
+    const promise=nativeRequest('notes.createTaskOptions',{bindingId:bindingID}).then(result=>{
+      taskOptionsCache={bindingID,options:result.options||[],plannedDurationAvailable:Boolean(result.plannedDurationAvailable)};
+      if(activeBindingId===bindingID)plannedDurationAvailable=taskOptionsCache.plannedDurationAvailable;
+      return taskOptionsCache;
+    }).finally(()=>{if(taskOptionsRequest?.bindingID===bindingID)taskOptionsRequest=null;});
+    taskOptionsRequest={bindingID,promise};
+    return promise;
+  }
+  function cancelInlineTaskEdit(shouldRender=true){inlineTaskEditState=null;if(shouldRender&&activeBindingId)renderNativePage();}
+  function canEditTaskInline(item){return Boolean(item&&!item.pendingCreate&&activeBindingId&&nativeHostAvailable&&authState==='connected'&&navigator.onLine&&!networkUnavailable&&!nativeSnapshotStale&&!nativeCompletionQueues.has(completionQueueKey(activeAccountKey,activeBindingId,item.id))&&!inlineTaskSaving);}
+  function attachInlineEditor(node,field,item){
+    node.classList.add('task-editable-field');node.tabIndex=0;node.setAttribute('role','button');
+    node.title=field==='title'?'点击编辑任务内容':field==='priority'?'点击修改优先级':'点击修改计划时长';
+    const start=event=>{event.preventDefault();event.stopPropagation();beginInlineTaskEdit(field,item,node);};
+    node.addEventListener('click',start);
+    node.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){start(event);}});
+  }
+  function beginInlineTaskEdit(field,item,node){
+    if(!canEditTaskInline(item)||inlineTaskEditState)return;
+    const bindingID=activeBindingId;
+    const editor=field==='priority'?document.createElement('select'):document.createElement('input');
+    editor.className=`task-inline-editor ${field==='title'?'title-editor':field==='priority'?'priority-editor':'duration-editor'}`;
+    const initialValue=field==='title'?item.title:field==='priority'?(item.priority||''):String(item.plannedDurationHours??'');
+    if(field==='priority'){
+      editor.append(new Option(initialValue||'正在读取…',initialValue));editor.disabled=true;
+    }else{
+      editor.type=field==='duration'?'number':'text';editor.value=initialValue;
+      if(field==='title'){editor.maxLength=500;editor.setAttribute('aria-label','编辑任务内容');}
+      else{editor.min='0.5';editor.step='0.5';editor.placeholder='—';editor.setAttribute('aria-label','编辑计划时长（小时）');}
+    }
+    const state={bindingID,recordID:item.id,field,initialValue,editor,committing:false};inlineTaskEditState=state;node.replaceWith(editor);editor.focus();
+    if(field==='title'&&editor.setSelectionRange)editor.setSelectionRange(editor.value.length,editor.value.length);
+    if(field==='priority'){
+      const populatePriorityOptions=(options,openPicker)=>{
+        if(inlineTaskEditState!==state)return;
+        if(!options.options.length)throw new Error('当前表格没有可用的优先级选项。');
+        editor.replaceChildren(...options.options.map(option=>new Option(option.name,option.id)));
+        const current=options.options.find(option=>option.name===initialValue);
+        if(!current)throw new Error('该任务的优先级选项已不存在，请检查飞书字段设置。');
+        editor.value=current.id;editor.disabled=false;editor.focus();
+        if(openPicker&&typeof editor.showPicker==='function'){try{editor.showPicker();}catch{}}
+      };
+      if(taskOptionsCache?.bindingID===bindingID){
+        try{populatePriorityOptions(taskOptionsCache,true);}catch(error){cancelInlineTaskEdit();toast(`无法读取优先级：${error.message}`);}
+      }else{
+        loadTaskOptions(bindingID).then(options=>populatePriorityOptions(options,false)).catch(error=>{if(inlineTaskEditState===state){cancelInlineTaskEdit();toast(`无法读取优先级：${error.message}`);}});
+      }
+    }
+    editor.addEventListener('keydown',event=>{
+      if(event.key==='Escape'){event.preventDefault();cancelInlineTaskEdit();}
+      else if(event.key==='Enter'){event.preventDefault();commitInlineTaskEdit(state);}
+    });
+    editor.addEventListener('input',()=>{state.value=editor.value;});
+    editor.addEventListener('change',()=>{state.value=editor.value;if(field==='priority')commitInlineTaskEdit(state);});
+    editor.addEventListener('blur',()=>{setTimeout(()=>{if(inlineTaskEditState===state&&!state.committing)commitInlineTaskEdit(state);},0);});
+  }
+  async function commitInlineTaskEdit(state){
+    if(inlineTaskEditState!==state||state.committing)return;
+    state.committing=true;
+    const item=nativeTodoItems.find(todo=>todo.id===state.recordID);
+    const rawValue=state.editor.value;
+    if(!item||state.bindingID!==activeBindingId){cancelInlineTaskEdit();return;}
+    let title=item.title,priority=item.priority,plannedDurationHours=item.plannedDurationHours;
+    if(state.field==='title'){
+      title=rawValue.trim();
+      if(!title){cancelInlineTaskEdit();toast('任务内容不能为空。');return;}
+    }else if(state.field==='duration'){
+      const trimmed=rawValue.trim();plannedDurationHours=trimmed?Number(trimmed):null;
+      if(plannedDurationHours!==null&&(!Number.isFinite(plannedDurationHours)||plannedDurationHours<0.5||plannedDurationHours*2!==Math.round(plannedDurationHours*2))){cancelInlineTaskEdit();toast('计划时长需以 0.5 小时为单位。');return;}
+    }
+    if(state.field==='priority'){
+      const selected=[...state.editor.options].find(option=>option.value===rawValue);
+      if(!selected){cancelInlineTaskEdit();return;}
+      priority=selected.textContent;
+    }
+    if(title===item.title&&priority===item.priority&&plannedDurationHours===item.plannedDurationHours){cancelInlineTaskEdit();return;}
+    const previous={...item};const updated={...item,title,priority,plannedDurationHours};
+    inlineTaskEditState=null;inlineTaskSaving=true;
+    nativeTodoItems=nativeTodoItems.map(todo=>todo.id===item.id?updated:todo);renderNativePage();
+    try{
+      const options=await loadTaskOptions(state.bindingID);
+      if(activeBindingId!==state.bindingID)return;
+      if(state.field==='duration'&&!options.plannedDurationAvailable)throw new Error('当前视图未配置计划时长字段，无法修改。');
+      const priorityOption=options.options.find(candidate=>candidate.name===priority);
+      if(!priorityOption)throw new Error('该任务的优先级选项已不存在，请检查飞书字段设置。');
+      const result=await nativeRequest('notes.updateTask',{bindingId:state.bindingID,recordId:item.id,title,priorityOptionID:priorityOption.id,plannedDurationHours:options.plannedDurationAvailable?plannedDurationHours:null,updatePlannedDuration:options.plannedDurationAvailable});
+      if(activeBindingId===state.bindingID){if(result.snapshot)applyNativeSnapshot(result.snapshot);else{nativeSnapshotStale=true;networkUnavailable=true;renderNativePage();}}
+      if(result.warning)notify(result.warning);
+    }catch(error){
+      if(activeBindingId===state.bindingID){nativeTodoItems=nativeTodoItems.map(todo=>todo.id===item.id?previous:todo);renderNativePage();}
+      toast(`修改失败：${error.message}`);
+    }finally{inlineTaskSaving=false;}
+  }
+  function closeAddMenu(){addMenu.classList.remove('open');addButton.setAttribute('aria-expanded','false');}
+  addButton.addEventListener('click',event=>{
+    event.stopPropagation();
+    const willOpen=!addMenu.classList.contains('open');
+    document.getElementById('more-menu').classList.remove('open');
+    document.getElementById('personalize-panel').classList.remove('open');
+    if(willOpen){addMenu.classList.add('open');addButton.setAttribute('aria-expanded','true');}
+    else closeAddMenu();
+    refreshCreateAvailability();
+  });
+  document.getElementById('new-note-button').addEventListener('click',showBindDialog);
+  async function openTaskForm(){
+    if(!activeBindingId||!nativeHostAvailable||authState!=='connected'||!navigator.onLine||networkUnavailable)return;
+    taskCreateClientToken=null;taskForm.reset();
+    document.getElementById('task-dialog-title').textContent='新建条目';
+    document.getElementById('task-date-field').hidden=false;
+    document.getElementById('task-submit').textContent='创建';
+    taskPrioritySelect.innerHTML='<option value="">正在读取优先级…</option>';taskPrioritySelect.disabled=true;
+    document.getElementById('task-create-date').textContent=formatDate(dateFromKey(selectedDateKey));
+    document.getElementById('task-create-error').textContent='';taskDialog.classList.add('open');
+    taskOptionsLoading=true;refreshCreateAvailability();
+    try{
+      const result=await loadTaskOptions(activeBindingId);
+      plannedDurationAvailable=result.plannedDurationAvailable;
+      document.getElementById('task-planned-duration-field').hidden=!plannedDurationAvailable;
+      taskPrioritySelect.replaceChildren(new Option('选择优先级',''));
+      for(const option of result.options||[])taskPrioritySelect.append(new Option(option.name,option.id));
+      if(!(result.options||[]).length)throw new Error('当前多维表格的优先级字段没有可用选项。');
+      taskPrioritySelect.disabled=false;taskTitleInput.focus();
+    }catch(error){
+      taskPrioritySelect.replaceChildren(new Option('无法读取优先级',''));
+      document.getElementById('task-create-error').textContent=`无法读取优先级：${error.message}`;
+    }finally{taskOptionsLoading=false;refreshCreateAvailability();}
+  }
+  document.getElementById('new-task-button').addEventListener('click',()=>{closeAddMenu();openTaskForm();});
+  document.getElementById('task-cancel').addEventListener('click',()=>{
+    taskDialog.classList.remove('open');taskForm.reset();taskPrioritySelect.replaceChildren(new Option('选择优先级',''));taskPrioritySelect.disabled=false;taskCreateClientToken=null;document.getElementById('task-dialog-title').textContent='新建条目';document.getElementById('task-date-field').hidden=false;taskSubmitButton.textContent='创建';document.getElementById('task-create-error').textContent='';refreshCreateAvailability();
+  });
+  taskPrioritySelect.addEventListener('change',refreshCreateAvailability);
+  taskTitleInput.addEventListener('input',refreshCreateAvailability);
+  taskForm.addEventListener('submit',async event=>{
+    event.preventDefault();
+    if(taskSubmitting||!activeBindingId||!navigator.onLine||networkUnavailable)return;
+    const title=taskTitleInput.value.trim();
+    const priorityOptionID=taskPrioritySelect.value;
+    const plannedDurationRaw=document.getElementById('task-planned-duration').value.trim();
+    const plannedDurationHours=plannedDurationRaw?Number(plannedDurationRaw):null;
+    const errorLabel=document.getElementById('task-create-error');
+    if(!title){errorLabel.textContent='请输入待办内容。';taskTitleInput.focus();return;}
+    if(!priorityOptionID){errorLabel.textContent='请选择优先级。';taskPrioritySelect.focus();return;}
+    if(plannedDurationHours!==null&&(!Number.isFinite(plannedDurationHours)||plannedDurationHours<0.5||plannedDurationHours*2!==Math.round(plannedDurationHours*2))){errorLabel.textContent='计划时长需以 0.5 小时为单位。';document.getElementById('task-planned-duration').focus();return;}
+    const bindingID=activeBindingId;
+    const date=dateFromKey(selectedDateKey);
+    taskCreateClientToken=taskCreateClientToken|| (window.crypto?.randomUUID?window.crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    const clientToken=taskCreateClientToken;
+    const optimisticID=`pending-${clientToken}`;
+    const submittedDateKey=selectedDateKey;
+    const optimisticItem={
+      id:optimisticID,
+      title,
+      priority:taskPrioritySelect.selectedOptions[0]?.textContent||null,
+      isDone:false,
+      dateMilliseconds:date.getTime(),
+      sourceOrder:Math.max(-1,...nativeTodoItems.map(item=>item.sourceOrder||0))+1,
+      plannedDurationHours,
+      pendingCreate:true
+    };
+    taskSubmitting=true;errorLabel.textContent='';taskSubmitButton.textContent='正在创建…';
+    nativeTodoItems=[...nativeTodoItems,optimisticItem];
+    nativeHasSnapshot=true;
+    renderNativePage();
+    taskDialog.classList.remove('open');
+    refreshCreateAvailability();
+    try{
+      const result=await nativeRequest('notes.createTask',{
+        bindingId:bindingID,
+        title,
+        priorityOptionID,
+        plannedDurationHours,
+        dateMilliseconds:date.getTime(),
+        clientToken
+      });
+      if(activeBindingId===bindingID){
+        if(result.snapshot&&!result.snapshot.stale){
+          applyNativeSnapshot(result.snapshot);
+        }else{
+          const confirmedID=result.recordID||optimisticID;
+          const alreadyPresent=nativeTodoItems.some(item=>item.id===confirmedID);
+          nativeTodoItems=nativeTodoItems.filter(item=>item.id!==optimisticID);
+          if(!alreadyPresent)nativeTodoItems.push({...optimisticItem,id:confirmedID,pendingCreate:false});
+          nativeSnapshotStale=true;networkUnavailable=true;renderNativePage();
+        }
+      }
+      if(result.warning)notify(result.warning);
+      taskForm.reset();taskPrioritySelect.replaceChildren(new Option('选择优先级',''));taskPrioritySelect.disabled=false;taskCreateClientToken=null;errorLabel.textContent='';
+    }catch(error){
+      if(activeBindingId===bindingID){
+        nativeTodoItems=nativeTodoItems.filter(item=>item.id!==optimisticID);
+        renderNativePage();
+      }
+      errorLabel.textContent=`创建失败：${error.message}`;
+      if(activeBindingId===bindingID&&selectedDateKey===submittedDateKey){
+        taskDialog.classList.add('open');
+        taskSubmitButton.focus();
+      }else{
+        taskCreateClientToken=null;
+        notify(`创建失败：${error.message}`);
+      }
+    }finally{taskSubmitting=false;taskSubmitButton.textContent='创建';refreshCreateAvailability();}
+  });
+  window.__todoDeleteTask=async recordID=>{
+    const bindingID=activeBindingId,index=nativeTodoItems.findIndex(item=>item.id===recordID);
+    if(!bindingID||index<0||nativeSnapshotStale||networkUnavailable||!navigator.onLine)return;
+    const mutationKey=completionQueueKey(activeAccountKey,bindingID,recordID),pendingCompletion=nativeCompletionQueues.get(mutationKey);
+    if(deletingTaskKeys.has(mutationKey))return;
+    if(pendingCompletion?.running){notify('这条任务的状态正在写回，请完成后再删除。');return;}
+    deletingTaskKeys.add(mutationKey);
+    if(pendingCompletion){nativeCompletionQueues.delete(mutationKey);persistPendingCompletions();}
+    const [removed]=nativeTodoItems.splice(index,1);renderNativePage();
+    try{
+      if(focusCurrentTask?.id===recordID)await leaveFocus();
+      const result=await nativeRequest('notes.deleteTask',{bindingId:bindingID,recordId:recordID});
+      nativeCompletionQueues.delete(mutationKey);persistPendingCompletions();
+      if(activeBindingId===bindingID&&result.snapshot)applyNativeSnapshot(result.snapshot);
+      if(result.warning)notify(result.warning);
+    }catch(error){
+      if(pendingCompletion){nativeCompletionQueues.set(mutationKey,pendingCompletion);persistPendingCompletions();}
+      if(activeBindingId===bindingID){nativeTodoItems.splice(Math.min(index,nativeTodoItems.length),0,{...removed,isDone:pendingCompletion?.desired??removed.isDone});renderNativePage();}
+      notify(`删除失败：${error.message}`);
+    }finally{deletingTaskKeys.delete(mutationKey);}
+  };
+  document.getElementById('task-planned-duration').addEventListener('input',refreshCreateAvailability);
+  async function openNotebook(){document.getElementById('more-menu').classList.remove('open');if(nativeHostAvailable){try{const result=await nativeRequest('notebook.list');replaceNotebookItems(result.items||[],result.activeBindingId);renderNotebook();}catch(error){toast(error.message);return;}}else renderNotebook();document.getElementById('notebook-dialog').classList.add('open');}
+  document.getElementById('open-notebook').addEventListener('click',openNotebook);
+  document.getElementById('closed-open-notebook').addEventListener('click',openNotebook);
+  async function hideTodoWindow(){
+    document.getElementById('more-menu').classList.remove('open');
+    if(!nativeHostAvailable){notify('原型预览：隐藏窗口会保留 Todo 在后台运行');return;}
+    try{await nativeRequest('app.hide');}
+    catch(error){notify(`隐藏失败：${error.message}`);}
+  }
+  window.hideTodoWindow=hideTodoWindow;
+  document.getElementById('configure-feishu-credentials').addEventListener('click',async()=>{
+    moreMenu.classList.remove('open');
+    if(!nativeHostAvailable){toast('请在 Todo 菜单栏中配置飞书应用凭证');return;}
+    try{const result=await nativeRequest('auth.credentials.configure');if(result.configured)toast('飞书应用凭证已保存在本机钥匙串');}
+    catch(error){toast(`无法配置飞书应用凭证：${error.message}`);}
+  });
+  document.getElementById('logout-feishu').addEventListener('click',async()=>{
+    moreMenu.classList.remove('open');
+    if(authState!=='connected')return;
+    if(focusCurrentTask)await leaveFocus();
+    if(!nativeHostAvailable){
+      authState='unconnected';authDisplayName='';replaceNotebookItems([],null);nativeTodoItems=[];nativeHasSnapshot=false;nativeSnapshotStale=false;nativeLoadError='';
+      document.getElementById('note').classList.add('is-empty','is-calendar');
+      document.getElementById('empty-note-content').hidden=false;document.getElementById('auth-empty').hidden=false;document.getElementById('closed-note-content').hidden=true;
+      renderAuthState();renderCalendar();return;
+    }
+    try{await nativeRequest('auth.signOut');}
+    catch(error){toast(`退出飞书登录失败：${error.message}`);}
+  });
+  document.getElementById('bind-cancel').addEventListener('click',()=>document.getElementById('bind-dialog').classList.remove('open'));
+  document.getElementById('view-url').addEventListener('input',()=>{if(bindingInspection)resetFieldMapping();});
+  document.getElementById('notebook-close').addEventListener('click',()=>document.getElementById('notebook-dialog').classList.remove('open'));
+  document.getElementById('bind-form').addEventListener('submit',async event=>{
+    event.preventDefault();const url=document.getElementById('view-url').value.trim();const errorLabel=document.getElementById('bind-error');errorLabel.textContent='';
+    if(nativeHostAvailable){
+      try{
+        if(!bindingInspection){
+          document.getElementById('bind-submit').disabled=true;document.getElementById('bind-submit').textContent='正在读取…';
+          bindingInspection=await nativeRequest('notes.inspectBinding',{viewUrl:url});renderFieldMapping(bindingInspection);return;
+        }
+        const fieldMapping={taskFieldID:document.getElementById('map-task-field').value,dateFieldID:document.getElementById('map-date-field').value,priorityFieldID:document.getElementById('map-priority-field').value,doneFieldID:document.getElementById('map-done-field').value,doneOptionID:document.getElementById('map-done-option').value,undoneOptionID:document.getElementById('map-undone-option').value};
+        if(Object.values(fieldMapping).some(value=>!value)){errorLabel.textContent='请完成所有字段选择。';return;}
+        document.getElementById('bind-submit').disabled=true;document.getElementById('bind-submit').textContent='正在绑定…';
+        const result=await nativeRequest('notes.createBinding',{viewUrl:url,inspectionID:bindingInspection.inspectionID,fieldMapping});pendingViewURL='';
+        const chosenDate=selectedDateKey;const entry={...result.binding,open:true,isActive:true,snapshot:result.snapshot};localNotebook.push(entry);activeBindingId=entry.id;applyNativeSnapshot(result.snapshot);document.getElementById('bind-dialog').classList.remove('open');showBoundNote();applyNotePreferences({...result.preferences,selectedDate:chosenDate});await saveNotePreferences({selectedDate:chosenDate},entry.id);updateDeleteAvailability();toast('已读取飞书视图并建立便签');
+      }catch(error){errorLabel.textContent=error.message;if(error.code==='INSPECTION_EXPIRED')resetFieldMapping();}
+      finally{document.getElementById('bind-submit').disabled=false;document.getElementById('bind-submit').textContent=bindingInspection?'建立便签':'读取视图字段';}
+      return;
+    }
+    let parsed;try{parsed=new URL(url);}catch{errorLabel.textContent='请粘贴有效的飞书多维表格视图链接。';return;}const viewId=parsed.searchParams.get('view')||parsed.searchParams.get('view_id');const tableId=parsed.searchParams.get('table')||parsed.searchParams.get('table_id');if(!/\.feishu\.cn$/i.test(parsed.hostname)||!/(\/base\/|\/wiki\/)/.test(parsed.pathname)||!viewId||!tableId){errorLabel.textContent='链接需包含飞书 Base、table 和 view 信息。';return;}if(localNotebook.some(entry=>entry.viewId===viewId)){errorLabel.textContent='这个视图已在便签夹中。';return;}const id=`note-${Date.now()}`;localNotebook.push({id,viewId,url,name:`${formatDate(dateFromKey(selectedDateKey))} 待办`,open:true});activeBindingId=id;document.getElementById('bind-dialog').classList.remove('open');showBoundNote();updateDeleteAvailability();toast(localNotebook.length===1?'已添加便签（原型任务为示例数据）':'已添加第二张便签（原型交互预览）');
+  });
+  async function closeCurrentPage(){document.getElementById('more-menu').classList.remove('open');if(focusCurrentTask)await leaveFocus();if(nativeHostAvailable){if(!activeBindingId)return;try{await nativeRequest('notes.closeCurrent',{bindingId:activeBindingId});activeBindingId=null;showClosedNote();toast('当前便签已关闭，仍保留在便签夹');}catch(error){toast(`关闭失败：${error.message}`);}return;}const entry=localNotebook.find(item=>item.id===activeBindingId);if(entry)entry.open=false;activeBindingId=null;showClosedNote();renderNotebook();toast('已关闭当前页；便签仍保留在便签夹');}
+  window.__todoCloseCurrentPage=closeCurrentPage;
+  function deleteCurrentNote(){if(!activeBindingId){toast('请先打开要删除的便签');return;}deleteBindingFromNotebook(activeBindingId);}
+  async function deleteBindingFromNotebook(bindingID){
+    const pending=pendingForBinding(bindingID);
+    if(pending.some(item=>item.running)){notify('这张便签仍有状态正在写回，请写回结束后再删除。');return;}
+    const prompt=pending.length
+      ?`这张便签有 ${pending.length} 条离线状态尚未写回。删除后这些状态会从本机队列中丢弃。\n\n仅删除本机便签、缓存和未写回状态，不删除飞书视图或任务。继续删除吗？`
+      :'仅从本机便签夹删除这张便签及其缓存？飞书视图和任务不会被删除。';
+    if(!window.confirm(prompt))return;
+    document.getElementById('more-menu').classList.remove('open');
+    const wasActive=activeBindingId===bindingID;
+    if(wasActive&&focusCurrentTask)await leaveFocus();
+    if(nativeHostAvailable){try{
+      const result=await nativeRequest('notes.deleteBinding',{bindingId:bindingID});
+      discardPendingForBinding(bindingID);
+      replaceNotebookItems(result.items||[],result.activeBindingId);
+      if(!localNotebook.length){showInitialEmptyState();}else if(wasActive){nativeTodoItems=[];nativeHasSnapshot=false;nativeSnapshotStale=false;nativeLoadError='';showClosedNote();}
+      renderNotebook();
+      if(result.warning)toast(result.warning);else toast('已从本机便签夹删除，不影响飞书数据');
+    }catch(error){toast(`删除失败：${error.message}`);}return;}
+    const index=localNotebook.findIndex(item=>item.id===bindingID);if(index>=0)localNotebook.splice(index,1);
+    if(!localNotebook.length){showInitialEmptyState();}else if(wasActive){activeBindingId=null;showClosedNote();}
+    renderNotebook();updateDeleteAvailability();toast('已从本机便签夹删除，不影响飞书数据');
+  }
+  document.getElementById('note').addEventListener('contextmenu',event=>{
+    event.preventDefault();
+    const row=event.target.closest('.task[data-record-id]');
+    window.webkit?.messageHandlers?.todoHost?.postMessage({
+      action:'taskContextMenu',bindingId:row?.dataset.bindingId||activeBindingId||null,
+      recordId:row?.dataset.recordId||null,
+      canMutate:Boolean(navigator.onLine&&!networkUnavailable&&!nativeSnapshotStale)
+    });
+  });
+  const note=document.getElementById('note');
+  const dragHandle=document.getElementById('drag-handle');
+  let dragging=false, resizing=false, startX=0, startY=0, baseLeft=0, baseTop=0, baseWidth=0, baseHeight=0, resizeEdge='';
+  dragHandle.addEventListener('pointerdown',event=>{
+    if(event.target.closest('button,input,select,label,.more-menu,.personalize-panel')) return;
+    dragging=true; dragHandle.setPointerCapture(event.pointerId);
+    const rect=note.getBoundingClientRect(); const parent=note.parentElement.getBoundingClientRect();
+    note.style.left=`${rect.left-parent.left}px`; note.style.top=`${rect.top-parent.top}px`;
+    startX=event.clientX; startY=event.clientY; baseLeft=parseFloat(note.style.left); baseTop=parseFloat(note.style.top);
+  });
+  dragHandle.addEventListener('pointermove',event=>{ if(!dragging)return; note.style.left=`${baseLeft+event.clientX-startX}px`; note.style.top=`${baseTop+event.clientY-startY}px`; });
+  dragHandle.addEventListener('pointerup',()=>dragging=false);
+  // 四边和四角分别调整窗口位置及尺寸，宽高都不会低于便签最小尺寸。
+  document.querySelectorAll('.resize-handle').forEach(handle=>{
+    handle.addEventListener('pointerdown',event=>{
+      resizing=true; resizeEdge=handle.dataset.edge; handle.setPointerCapture(event.pointerId);
+      const rect=note.getBoundingClientRect(); const parent=note.parentElement.getBoundingClientRect();
+      baseLeft=rect.left-parent.left; baseTop=rect.top-parent.top; baseWidth=rect.width; baseHeight=rect.height;
+      startX=event.clientX; startY=event.clientY; event.preventDefault(); event.stopPropagation();
+    });
+    handle.addEventListener('pointermove',event=>{
+      if(!resizing)return;
+      const dx=event.clientX-startX, dy=event.clientY-startY;
+      let left=baseLeft, top=baseTop, width=baseWidth, height=baseHeight;
+      if(resizeEdge.includes('e')) width=Math.max(270,baseWidth+dx);
+      if(resizeEdge.includes('s')) height=Math.max(260,baseHeight+dy);
+      if(resizeEdge.includes('w')) { width=Math.max(270,baseWidth-dx); left=baseLeft+baseWidth-width; }
+      if(resizeEdge.includes('n')) { height=Math.max(260,baseHeight-dy); top=baseTop+baseHeight-height; }
+      note.style.left=`${left}px`; note.style.top=`${top}px`; note.style.width=`${width}px`; note.style.height=`${height}px`;
+    });
+    handle.addEventListener('pointerup',()=>{resizing=false;resizeEdge='';});
+    handle.addEventListener('lostpointercapture',()=>{resizing=false;resizeEdge='';});
+  });
+  if(nativeHostAvailable){document.getElementById('active-list').replaceChildren();document.querySelector('#completed-list .task-list').replaceChildren();}
+  function localDateKey(date){return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;}
+  function dayKey(milliseconds){return localDateKey(new Date(milliseconds));}
+  function dateFromKey(key){const [year,month,day]=key.split('-').map(Number);return new Date(year,month-1,day);}
+  function formatDate(date=new Date()){return `${date.getMonth()+1}/${String(date.getDate()).padStart(2,'0')}`;}
+  function monthStart(date){return new Date(date.getFullYear(),date.getMonth(),1);}
+  function renderCalendar(){
+    const year=calendarMonthDate.getFullYear(),month=calendarMonthDate.getMonth();
+    document.getElementById('calendar-month-title').textContent=`${year}年${month+1}月`;
+    const grid=document.getElementById('calendar-grid');grid.replaceChildren();
+    const offset=(new Date(year,month,1).getDay()+6)%7,day=new Date(year,month,1-offset),todayKey=localDateKey(new Date());
+    for(let index=0;index<42;index++){
+      const key=localDateKey(day),button=document.createElement('button');
+      button.type='button';button.className='calendar-day';button.textContent=String(day.getDate());
+      button.setAttribute('role','gridcell');button.setAttribute('aria-label',`${day.getFullYear()}年${day.getMonth()+1}月${day.getDate()}日`);
+      button.setAttribute('aria-pressed',String(key===selectedDateKey));
+      if(day.getMonth()!==month)button.classList.add('is-adjacent');
+      if(key===todayKey){button.classList.add('is-today');button.title='今天';}
+      if(key===selectedDateKey)button.classList.add('is-selected');
+      button.addEventListener('click',()=>selectCalendarDate(key));grid.append(button);day.setDate(day.getDate()+1);
+    }
+  }
+  function changeCalendarMonth(offset){calendarMonthDate=new Date(calendarMonthDate.getFullYear(),calendarMonthDate.getMonth()+offset,1);renderCalendar();}
+  function selectCalendarDate(dateKey){
+    selectedDateKey=dateKey;calendarMonthDate=monthStart(dateFromKey(dateKey));updateDateHeader();renderCalendar();
+    if(activeBindingId){showBoundNote();if(nativeHostAvailable)renderNativePage();else renderPrototypeDate();saveNotePreferences({selectedDate:selectedDateKey});}
+  }
+  function selectCalendarToday(){
+    selectedDateKey=localDateKey(new Date());calendarMonthDate=monthStart(new Date());updateDateHeader();renderCalendar();
+    if(activeBindingId){if(nativeHostAvailable)renderNativePage();else renderPrototypeDate();saveNotePreferences({selectedDate:selectedDateKey});}
+  }
+  function openCalendar(){
+    if(!activeBindingId){showInitialEmptyState();return;}
+    calendarMonthDate=monthStart(dateFromKey(selectedDateKey));renderCalendar();
+    const sticky=document.getElementById('note');sticky.classList.add('is-calendar');sticky.classList.remove('is-empty');
+    document.getElementById('empty-note-content').hidden=false;document.getElementById('closed-note-content').hidden=true;
+    document.getElementById('note-title').textContent='日历';
+  }
+  document.getElementById('previous-month').addEventListener('click',()=>changeCalendarMonth(-1));
+  document.getElementById('next-month').addEventListener('click',()=>changeCalendarMonth(1));
+  document.getElementById('calendar-today').addEventListener('click',selectCalendarToday);
+  document.getElementById('open-calendar').addEventListener('click',openCalendar);
+  renderCalendar();
+  function updateDateHeader(){const title=document.getElementById('note-title');if(note.classList.contains('is-calendar')&&!note.classList.contains('is-empty')){title.textContent='日历';return;}const date=dateFromKey(selectedDateKey);title.textContent=`${formatDate(date)} 待办`;}
+  function shiftSelectedDate(offset){const date=dateFromKey(selectedDateKey);date.setDate(date.getDate()+offset);setSelectedDate(localDateKey(date));}
+  function setSelectedDate(dateKey){if(!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)||dateKey===selectedDateKey)return;selectedDateKey=dateKey;calendarMonthDate=monthStart(dateFromKey(dateKey));updateDateHeader();renderCalendar();if(nativeHostAvailable)renderNativePage();else renderPrototypeDate();saveNotePreferences({selectedDate:selectedDateKey});}
+  document.getElementById('previous-day').addEventListener('click',()=>shiftSelectedDate(-1));
+  document.getElementById('next-day').addEventListener('click',()=>shiftSelectedDate(1));
+  document.getElementById('return-today').addEventListener('click',()=>setSelectedDate(localDateKey(new Date())));
+  const completedDetails=document.getElementById('completed-list');
+  const completedTasks=completedDetails.querySelector('.task-list');
+  const completedScrollTrack=document.getElementById('completed-scroll-track');
+  const completedScrollThumb=document.getElementById('completed-scroll-thumb');
+  function updateCompletedScrollbar(){
+    const maxScroll=completedTasks.scrollHeight-completedTasks.clientHeight;
+    const hasOverflow=completedDetails.open&&maxScroll>1;
+    completedDetails.classList.toggle('has-overflow',hasOverflow);
+    if(!hasOverflow)return;
+    const trackHeight=completedScrollTrack.clientHeight;
+    const thumbHeight=Math.min(trackHeight,Math.max(22,trackHeight*completedTasks.clientHeight/completedTasks.scrollHeight));
+    const thumbTravel=Math.max(0,trackHeight-thumbHeight);
+    const thumbTop=maxScroll?thumbTravel*completedTasks.scrollTop/maxScroll:0;
+    completedScrollThumb.style.height=`${thumbHeight}px`;
+    completedScrollThumb.style.transform=`translateY(${thumbTop}px)`;
+  }
+  function syncCompletedListHeight(){
+    if(!completedDetails.open){completedDetails.style.removeProperty('height');completedTasks.style.removeProperty('height');completedDetails.classList.remove('has-overflow');return;}
+    completedDetails.style.height='auto';
+    completedTasks.style.height='auto';
+    const summary=completedDetails.querySelector('summary');
+    const noteHeader=document.querySelector('.note-head');
+    const activeList=document.getElementById('active-list');
+    const summaryHeight=summary.offsetHeight;
+    const naturalTaskHeight=completedTasks.scrollHeight;
+    const availableHeight=Math.max(summaryHeight+1,note.clientHeight-noteHeader.offsetHeight-activeList.offsetHeight-16);
+    const containerHeight=Math.min(summaryHeight+naturalTaskHeight+1,availableHeight);
+    const taskViewportHeight=Math.max(0,containerHeight-summaryHeight-1);
+    completedTasks.style.height=`${taskViewportHeight}px`;
+    completedDetails.style.height=`${containerHeight}px`;
+    requestAnimationFrame(updateCompletedScrollbar);
+  }
+  completedDetails.addEventListener('toggle',syncCompletedListHeight);
+  completedTasks.addEventListener('scroll',updateCompletedScrollbar,{passive:true});
+  completedTasks.addEventListener('wheel',event=>{if(completedTasks.scrollHeight>completedTasks.clientHeight){completedTasks.scrollTop+=event.deltaY;event.preventDefault();}},{passive:false});
+  let scrollbarDrag=null;
+  completedScrollTrack.addEventListener('pointerdown',event=>{
+    if(!completedDetails.open)return;
+    event.preventDefault();
+    const trackRect=completedScrollTrack.getBoundingClientRect();
+    const thumbHeight=completedScrollThumb.getBoundingClientRect().height;
+    const maxScroll=completedTasks.scrollHeight-completedTasks.clientHeight;
+    if(event.target===completedScrollThumb){scrollbarDrag={pointerY:event.clientY,scrollTop:completedTasks.scrollTop};completedScrollTrack.setPointerCapture(event.pointerId);return;}
+    const travel=Math.max(1,trackRect.height-thumbHeight);
+    const thumbTop=Math.min(travel,Math.max(0,event.clientY-trackRect.top-thumbHeight/2));
+    completedTasks.scrollTop=maxScroll*thumbTop/travel;
+    scrollbarDrag={pointerY:event.clientY,scrollTop:completedTasks.scrollTop};completedScrollTrack.setPointerCapture(event.pointerId);
+  });
+  completedScrollTrack.addEventListener('pointermove',event=>{if(!scrollbarDrag)return;const travel=Math.max(1,completedScrollTrack.clientHeight-completedScrollThumb.offsetHeight);const maxScroll=completedTasks.scrollHeight-completedTasks.clientHeight;completedTasks.scrollTop=scrollbarDrag.scrollTop+(event.clientY-scrollbarDrag.pointerY)*maxScroll/travel;});
+  completedScrollTrack.addEventListener('pointerup',()=>{scrollbarDrag=null;});
+  completedScrollTrack.addEventListener('lostpointercapture',()=>{scrollbarDrag=null;});
+  new MutationObserver(syncCompletedListHeight).observe(completedTasks,{childList:true,subtree:true});
+  new ResizeObserver(syncCompletedListHeight).observe(note);
+  function formatFocusTime(value){const seconds=Math.max(0,Math.floor(value||0));return `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`;}
+  function paintFocusState(state){
+    if(!state||!focusCurrentTask)return;
+    const previousConfiguration=focusState?.configuration;
+    focusState=state;
+    const taskID=focusCurrentTask.id;const sameTask=state.taskId===taskID;
+    const total=sameTask?Number(state.totalFocusedSeconds||0):0;const round=sameTask?Number(state.roundElapsedSeconds||0):0;
+    const roundLength=Number(state.roundDurationSeconds||1500);const circumference=2*Math.PI*53;
+    const planSeconds=Number(focusCurrentTask.plannedDurationHours||0)*3600;let planProgress=planSeconds?((total%planSeconds)/planSeconds):0;if(planSeconds&&total>0&&planProgress===0)planProgress=1;
+    const planRing=document.getElementById('focus-plan-ring');planRing.style.strokeDasharray=String(circumference);planRing.style.strokeDashoffset=String(circumference*(1-planProgress));planRing.style.opacity=planSeconds?'1':'0';
+    const roundCircumference=2*Math.PI*42;const roundRing=document.getElementById('focus-round-ring');roundRing.style.strokeDasharray=String(roundCircumference);roundRing.style.strokeDashoffset=String(roundCircumference*(1-Math.min(1,round/roundLength)));
+    document.getElementById('focus-total-time').textContent=formatFocusTime(total);
+    document.getElementById('focus-plan-label').textContent=planSeconds?`计划 ${focusCurrentTask.plannedDurationHours} 小时${total>planSeconds?` · 已超出 ${Math.floor(total/planSeconds)} 圈`:''}`:'未设置计划时长';
+    const mode=sameTask&&state.activeTaskId===taskID?state.mode:'idle';const status=document.getElementById('focus-status');const toggle=document.getElementById('focus-toggle');
+    if(mode==='work'){status.textContent=`本轮 ${formatFocusTime(round)} / ${formatFocusTime(roundLength)}`;toggle.textContent='暂停';}
+    else if(mode==='rest'){status.textContent=`休息中 · ${formatFocusTime(state.breakRemainingSeconds)}`;toggle.textContent='结束休息';}
+    else{status.textContent=`已完成 ${state.completedRounds||0} 轮`;toggle.textContent='继续专注';}
+    const config=state.configuration||{};if(!previousConfiguration||JSON.stringify(previousConfiguration)!==JSON.stringify(config)){document.getElementById('focus-work-minutes').value=config.workMinutes||25;document.getElementById('focus-short-minutes').value=config.shortBreakMinutes||5;document.getElementById('focus-long-minutes').value=config.longBreakMinutes||15;document.getElementById('focus-long-every').value=config.longBreakEvery||4;}
+  }
+  async function enterFocus(item){
+    if(!nativeHostAvailable||!activeBindingId)return;
+    focusCurrentTask=item;document.getElementById('focus-task-title').textContent=item.title;document.getElementById('note').classList.add('is-focus-mode');document.getElementById('focus-status').textContent='正在读取计时…';
+    try{paintFocusState(await nativeRequest('focus.start',{bindingId:activeBindingId,taskId:item.id}));}
+    catch(error){document.getElementById('focus-status').textContent=`无法读取计时：${error.message}`;}
+  }
+  async function leaveFocus(){
+    const bindingID=activeBindingId;const task=focusCurrentTask;document.getElementById('note').classList.remove('is-focus-mode');focusCurrentTask=null;focusState=null;
+    if(nativeHostAvailable&&bindingID&&task){try{await nativeRequest('focus.pause',{bindingId:bindingID,taskId:task.id});}catch{}}
+  }
+  window.receiveFocusTick=state=>{if(focusCurrentTask&&state.bindingId===activeBindingId&&state.taskId===focusCurrentTask.id)paintFocusState(state);};
+  document.getElementById('focus-back').addEventListener('click',leaveFocus);
+  document.getElementById('focus-toggle').addEventListener('click',async()=>{
+    if(!focusCurrentTask||!activeBindingId)return;
+    try{const method=focusState?.mode==='work'&&focusState?.activeTaskId===focusCurrentTask.id?'focus.pause':'focus.start';paintFocusState(await nativeRequest(method,{bindingId:activeBindingId,taskId:focusCurrentTask.id}));}
+    catch(error){document.getElementById('focus-status').textContent=error.message;}
+  });
+  document.getElementById('focus-settings-toggle').addEventListener('click',event=>{const panel=document.getElementById('focus-settings');const open=panel.hidden;panel.hidden=!open;event.currentTarget.setAttribute('aria-expanded',String(open));});
+  document.getElementById('focus-save-settings').addEventListener('click',async()=>{
+    if(!focusCurrentTask||!activeBindingId)return;
+    const values={workMinutes:Number(document.getElementById('focus-work-minutes').value),shortBreakMinutes:Number(document.getElementById('focus-short-minutes').value),longBreakMinutes:Number(document.getElementById('focus-long-minutes').value),longBreakEvery:Number(document.getElementById('focus-long-every').value)};
+    try{paintFocusState(await nativeRequest('focus.configure',{bindingId:activeBindingId,taskId:focusCurrentTask.id,...values}));document.getElementById('focus-status').textContent='设置已保存';}
+    catch(error){document.getElementById('focus-status').textContent=error.message;}
+  });
+  function renderNativePage(){
+    if(inlineTaskEditState)return;
+    updateDateHeader();
+    const items=nativeTodoItems.filter(item=>dayKey(item.dateMilliseconds)===selectedDateKey);
+    const active=document.getElementById('active-list');const completed=document.querySelector('#completed-list .task-list');active.replaceChildren();completed.replaceChildren();
+    renderProjectionWarning(items);
+    const appendEmpty=(target,text)=>{const empty=document.createElement('div');empty.className='empty-hint';empty.textContent=text;target.append(empty);};
+    const makeRow=item=>{
+      const row=document.createElement('div');row.className=`task${item.isDone?' done':''}${item.pendingCreate?' is-pending-create':''}`;row.dataset.recordId=item.id;row.dataset.bindingId=activeBindingId||'';
+      const queueKey=completionQueueKey(activeAccountKey,activeBindingId,item.id);const checkbox=document.createElement('input');checkbox.className='check';checkbox.type='checkbox';checkbox.disabled=Boolean(item.pendingCreate)||nativeCompletionQueues.has(queueKey);const pending=nativeCompletionQueues.get(queueKey);checkbox.checked=pending?pending.desired:Boolean(item.isDone);checkbox.title=item.pendingCreate?'正在创建任务':!navigator.onLine?'离线时更改会保留在本机，联网后自动写回':'更改后会写回飞书多维表格';checkbox.addEventListener('change',()=>setNativeCompletion(checkbox,checkbox.checked));
+      const title=document.createElement('span');title.className='task-text';title.textContent=item.title;attachInlineEditor(title,'title',item);row.append(checkbox,title);
+      if(item.plannedDurationHours!=null||plannedDurationAvailable){const planned=document.createElement('span');planned.className=`planned-duration${item.plannedDurationHours==null?' is-empty':''}`;planned.textContent=item.plannedDurationHours==null?'—':`${item.plannedDurationHours}h`;planned.title=item.plannedDurationHours==null?'点击设置计划时长':'点击修改计划时长';attachInlineEditor(planned,'duration',item);row.append(planned);}
+      if(!item.isDone){const focus=document.createElement('button');focus.type='button';focus.className='focus-start';focus.textContent='▶';focus.title=item.pendingCreate?'正在创建任务':'开始番茄钟';focus.disabled=Boolean(item.pendingCreate);focus.setAttribute('aria-label',`专注：${item.title}`);focus.addEventListener('click',()=>enterFocus(item));row.append(focus);}
+      if(item.priority){const priority=document.createElement('span');priority.className=`priority${item.priority==='高'?' high':''}`;priority.textContent=item.priority;attachInlineEditor(priority,'priority',item);row.append(priority);}
+      return row;
+    };
+    const openItems=items.filter(item=>!item.isDone),doneItems=items.filter(item=>item.isDone);
+    const allDone=nativeHasSnapshot&&items.length>0&&openItems.length===0;active.classList.toggle('is-all-done',allDone);
+    const hasDateProjectionIssues=nativeProjectionIssues.some(issue=>issue.dateMilliseconds!=null&&dayKey(issue.dateMilliseconds)===selectedDateKey);
+    if(openItems.length)openItems.forEach(item=>active.append(makeRow(item)));else if(!nativeHasSnapshot)appendEmpty(active,nativeLoadError?'暂时无法读取视图，点击刷新重试':'正在读取飞书视图…');else if(!items.length&&!hasDateProjectionIssues)appendEmpty(active,'当前日期暂无待办项，请检查飞书视图筛选');
+    doneItems.forEach(item=>completed.append(makeRow(item)));document.getElementById('completed-list').hidden=false;document.getElementById('done-count').textContent=`${doneItems.length} 项`;
+    updateNetworkIndicator();
+    updateProgress();applyFontSpans();syncCompletedListHeight();
+  }
+  function renderProjectionWarning(loadedItems){
+    const panel=document.getElementById('projection-warning');
+    const summary=document.getElementById('projection-warning-summary');
+    const list=document.getElementById('projection-warning-list');
+    if(!panel||!summary||!list)return;
+    const datedIssues=nativeProjectionIssues.filter(issue=>issue.dateMilliseconds!=null&&dayKey(issue.dateMilliseconds)===selectedDateKey);
+    const undatedIssues=nativeProjectionIssues.filter(issue=>issue.dateMilliseconds==null);
+    const totalForDate=loadedItems.length+datedIssues.length;
+    const messages=[];
+    if(datedIssues.length)messages.push(`当前视图当天 ${totalForDate} 条，已加载 ${loadedItems.length} 条；${datedIssues.length} 条字段异常未显示`);
+    if(undatedIssues.length)messages.push(`另有 ${undatedIssues.length} 条记录的日期字段异常，无法判断所属日期`);
+    panel.hidden=messages.length===0;
+    if(panel.hidden){list.replaceChildren();panel.open=false;return;}
+    summary.textContent=messages.join('；');
+    list.replaceChildren();
+    for(const issue of [...datedIssues,...undatedIssues]){
+      const row=document.createElement('li');
+      row.textContent=`记录 ${issue.recordID}：${issue.reason}`;
+      list.append(row);
+    }
+  }
+  function applyNativeSnapshot(snapshot){if(!snapshot)return;if(activeAccountKey&&activeBindingId)reconcilePendingCompletions(activeAccountKey,activeBindingId,snapshot);const items=snapshot.items||[];nativeProjectionIssues=snapshot.projectionIssues||[];nativeTodoItems=items.map(item=>{const pending=nativeCompletionQueues.get(completionQueueKey(activeAccountKey,activeBindingId,item.id));return pending?{...item,isDone:pending.desired}:item;});nativeSnapshotStale=Boolean(snapshot.stale);networkUnavailable=nativeSnapshotStale||!navigator.onLine||hasActiveAccountPending();nativeHasSnapshot=true;nativeLoadError='';renderNativePage();}
+  function renderPrototypeDate(){const active=document.getElementById('active-list');const completed=document.querySelector('#completed-list .task-list');if(prototypeTaskMarkup===null)prototypeTaskMarkup={active:active.innerHTML,completed:completed.innerHTML};if(localDateKey(new Date())===selectedDateKey){active.innerHTML=prototypeTaskMarkup.active;completed.innerHTML=prototypeTaskMarkup.completed;updateProgress();applyFontSpans();syncCompletedListHeight();return;}active.replaceChildren();const empty=document.createElement('div');empty.className='empty-hint';empty.textContent='当前日期暂无待办项，请检查飞书视图筛选';active.append(empty);completed.replaceChildren();document.getElementById('done-count').textContent='0 项';updateProgress();syncCompletedListHeight();}
+  function applyNativeCompletionSnapshot(snapshot,recordId){
+    if(!snapshot)return;
+    nativeProjectionIssues=snapshot.projectionIssues||nativeProjectionIssues;
+    const changedItem=(snapshot.items||[]).find(item=>item.id===recordId);
+    if(changedItem)nativeTodoItems=nativeTodoItems.map(item=>item.id===recordId?changedItem:item);
+    nativeSnapshotStale=Boolean(snapshot.stale);networkUnavailable=nativeSnapshotStale;nativeHasSnapshot=true;nativeLoadError='';
+    if(activeBindingId)renderNativePage();
+    if(snapshot.error&&navigator.onLine)toast(`刷新失败，继续显示上次数据：${snapshot.error}`);
+  }
+  async function refreshActiveNote(){if(!nativeHostAvailable||!activeBindingId)return;nativeLoadError='';try{const result=await nativeRequest('notes.refresh',{bindingId:activeBindingId,reason:'manual'});applyNativeSnapshot(result.snapshot);if(result.warning)notify(result.warning);if(result.error){nativeLoadError=result.error;networkUnavailable=true;updateNetworkIndicator();if(hasActiveAccountPending())scheduleCompletionRetry();return;}flushPendingCompletions();}catch(error){nativeLoadError=error.message;nativeSnapshotStale=nativeHasSnapshot;networkUnavailable=isNetworkFailure(error);renderNativePage();if(!isNetworkFailure(error))toast(`无法刷新飞书数据：${error.message}`);}}
+  window.__todoMoveTaskToToday=async({bindingId:bindingID,recordId:recordID})=>{
+    if(!nativeHostAvailable||!bindingID||!recordID||bindingID!==activeBindingId)return;
+    const item=nativeTodoItems.find(todo=>todo.id===recordID);if(!item||item.isDone)return;
+    const now=new Date();const todayKey=localDateKey(now);const yesterdayDate=new Date(now.getFullYear(),now.getMonth(),now.getDate()-1);const yesterdayKey=localDateKey(yesterdayDate);
+    if(dayKey(item.dateMilliseconds)!==yesterdayKey)return;
+    const previousDateKey=selectedDateKey;const todayMilliseconds=dateFromKey(todayKey).getTime();
+    selectedDateKey=todayKey;calendarMonthDate=monthStart(dateFromKey(todayKey));
+    nativeTodoItems=nativeTodoItems.map(todo=>todo.id===recordID?{...todo,dateMilliseconds:todayMilliseconds}:todo);
+    updateDateHeader();renderCalendar();renderNativePage();
+    try{
+      const result=await nativeRequest('todos.moveToToday',{bindingId:bindingID,recordId:recordID});
+      if(activeBindingId!==bindingID)return;
+      applyNativeSnapshot(result.snapshot);
+      if(result.warning)notify(result.warning);
+      await saveNotePreferences({selectedDate:todayKey},bindingID);
+    }catch(error){
+      if(activeBindingId!==bindingID)return;
+      selectedDateKey=previousDateKey;calendarMonthDate=monthStart(dateFromKey(previousDateKey));
+      nativeTodoItems=nativeTodoItems.map(todo=>todo.id===recordID?{...todo,dateMilliseconds:item.dateMilliseconds}:todo);
+      updateDateHeader();renderCalendar();renderNativePage();notify(`迁移失败：${error.message}`);
+    }
+  };
+  const moreButton=document.getElementById('more-button');
+  const moreMenu=document.getElementById('more-menu');
+  const personalizePanel=document.getElementById('personalize-panel');
+  const fixedTaskPanel=document.getElementById('fixed-task-panel');
+  let editingFixedTaskID=null;
+  const failedFixedOccurrenceDates=new Map();
+  function resetMenuSubmenus(){moreMenu.querySelectorAll('.menu-submenu.open').forEach(panel=>panel.classList.remove('open'));moreMenu.querySelectorAll('.menu-group[aria-expanded="true"]').forEach(button=>button.setAttribute('aria-expanded','false'));}
+  moreButton.addEventListener('click',event=>{event.stopPropagation();closeAddMenu();if(moreMenu.classList.contains('open')){resetMenuSubmenus();moreMenu.classList.remove('open');}else{resetMenuSubmenus();moreMenu.classList.add('open');}personalizePanel.classList.remove('open');fixedTaskPanel.classList.remove('open');updateDeleteAvailability();});
+  moreMenu.addEventListener('click',event=>{
+    const group=event.target.closest('.menu-group');
+    if(group){event.stopPropagation();const panel=group.nextElementSibling;const wasOpen=panel.classList.contains('open');resetMenuSubmenus();if(!wasOpen){panel.classList.add('open');group.setAttribute('aria-expanded','true');}return;}
+    if(event.target.closest('.menu-item')){resetMenuSubmenus();moreMenu.classList.remove('open');}
+  });
+  document.getElementById('personalize-button').addEventListener('click',event=>{event.stopPropagation();moreMenu.classList.remove('open');personalizePanel.classList.add('open');loadFixedTaskOptions();});
+  document.getElementById('personalize-close').addEventListener('click',()=>personalizePanel.classList.remove('open'));
+  document.getElementById('manage-fixed-tasks').addEventListener('click',event=>{event.stopPropagation();moreMenu.classList.remove('open');resetMenuSubmenus();personalizePanel.classList.remove('open');fixedTaskPanel.classList.add('open');resetFixedTaskForm();renderFixedTaskList();});
+  document.getElementById('fixed-task-close').addEventListener('click',()=>fixedTaskPanel.classList.remove('open'));
+  document.getElementById('fixed-task-show-form').addEventListener('click',()=>{
+    if(!activeBindingId||!nativeHostAvailable)return;
+    document.getElementById('fixed-task-show-form').hidden=true;
+    document.getElementById('fixed-task-form').hidden=false;
+    document.getElementById('fixed-task-name').focus();
+    loadFixedTaskOptions();
+  });
+  document.getElementById('fixed-task-edit-cancel').addEventListener('click',resetFixedTaskForm);
+  document.addEventListener('pointerdown',event=>{if(!event.target.closest('.actions')){closeAddMenu();resetMenuSubmenus();moreMenu.classList.remove('open');personalizePanel.classList.remove('open');fixedTaskPanel.classList.remove('open');}});
+  function togglePin(){moreMenu.classList.remove('open');const pinned=!note.classList.contains('pinned');if(nativeHostAvailable){nativeRequest('notes.setPinned',{pinned}).catch(error=>toast(error.message));return;}note.classList.toggle('pinned',pinned);document.getElementById('pin-label').textContent=pinned?'取消置顶':'置顶';}
+  document.getElementById('open-source-progress').addEventListener('click',async event=>{event.stopPropagation();if(nativeHostAvailable&&activeBindingId){try{await nativeRequest('notes.openSource',{bindingId:activeBindingId});}catch(error){toast(error.message);}return;}toast('将在飞书中打开对应视图');});
+  updateDateHeader();
+  if(nativeHostAvailable){nativeRequest('app.bootstrap').then(async result=>{pendingViewURL=result.pendingViewUrl||'';if(pendingViewURL)document.getElementById('view-url').value=pendingViewURL;if(result.authenticated){activateAccount(result.accountKey);networkUnavailable=!navigator.onLine||hasActiveAccountPending();authState='connected';authDisplayName=result.displayName||'飞书用户';renderAuthState();await restoreNativeNotebook();flushPendingCompletions();}}).catch(error=>toast(error.message));}
+  function applyFontSpans(){
+    document.querySelectorAll('#active-list .task-text,#completed-list .task-text').forEach(el=>{
+      if(el.querySelector('span'))return;
+      const text=el.textContent; const parts=text.match(/[\u3400-\u9fff\u3000-\u303f\uff00-\uffef]+|[A-Za-z0-9]+|[^\u3400-\u9fff\u3000-\u303f\uff00-\uffefA-Za-z0-9]+/g)||[text];
+      el.textContent=''; parts.forEach(part=>{const span=document.createElement('span');span.textContent=part;span.className=/[\u3400-\u9fff\u3000-\u303f\uff00-\uffef]/.test(part)?'cn-text':(/[A-Za-z0-9]/.test(part)?'en-text':'');el.appendChild(span);});
+    });
+  }
+  applyFontSpans();
+  function applyNotePreferences(preferences={}){
+    if(!preferences)return;
+    const previousDateKey=selectedDateKey;
+    activeNotePreferences={opacity:100,fontCN:'PingFang SC',fontEN:'-apple-system',textColor:'#454239',textColorScope:'task',textBold:false,textItalic:false,selectedDate:localDateKey(new Date()),fixedTasks:[],...preferences};
+    if(/^\d{4}-\d{2}-\d{2}$/.test(activeNotePreferences.selectedDate))selectedDateKey=activeNotePreferences.selectedDate;
+    calendarMonthDate=monthStart(dateFromKey(selectedDateKey));renderCalendar();
+    updateDateHeader();
+    if(previousDateKey!==selectedDateKey&&nativeHostAvailable&&nativeHasSnapshot)renderNativePage();
+    const {opacity=100,fontCN='PingFang SC',fontEN='-apple-system',textColor='#454239',textColorScope='task',textBold=false,textItalic=false,backgroundImageData}=activeNotePreferences;
+    note.style.setProperty('--font-cn',`"${fontCN}"`);note.style.setProperty('--font-en',`"${fontEN}"`);note.style.setProperty('--paper-opacity',Number(opacity)/100);
+    note.style.setProperty('--task-text-color',textColor);note.style.setProperty('--task-font-weight',textBold?'700':'400');note.style.setProperty('--task-font-style',textItalic?'italic':'normal');
+    note.classList.toggle('text-color-scope-major',textColorScope==='major');
+    note.style.setProperty('--paper-image',backgroundImageData?`url("${backgroundImageData}")`:'none');
+    document.getElementById('clear-background').disabled=!Boolean(backgroundImageData);
+    document.getElementById('font-cn').value=fontCN;document.getElementById('font-en').value=fontEN;document.getElementById('opacity-range').value=opacity;document.getElementById('opacity-value').textContent=`${opacity}%`;
+    document.getElementById('text-color-scope').value=textColorScope;document.getElementById('text-color-custom').value=textColor;
+    document.querySelectorAll('.text-color-swatch').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.color.toUpperCase()===textColor.toUpperCase())));
+    document.getElementById('text-bold-toggle').setAttribute('aria-pressed',String(Boolean(textBold)));document.getElementById('text-italic-toggle').setAttribute('aria-pressed',String(Boolean(textItalic)));
+    updateTextStylePreview();
+    renderFixedTaskList();
+  }
+  function contrastRatio(foreground,background){
+    const channel=value=>{const normalized=value/255;return normalized<=0.04045?normalized/12.92:((normalized+0.055)/1.055)**2.4;};
+    const luminance=hex=>{const rgb=hex.replace('#','').match(/.{2}/g).map(value=>parseInt(value,16));return .2126*channel(rgb[0])+.7152*channel(rgb[1])+.0722*channel(rgb[2]);};
+    const a=luminance(foreground),b=luminance(background);return (Math.max(a,b)+.05)/(Math.min(a,b)+.05);
+  }
+  function updateTextStylePreview(){
+    const color=activeNotePreferences.textColor||'#454239',bold=Boolean(activeNotePreferences.textBold),italic=Boolean(activeNotePreferences.textItalic);
+    const preview=document.getElementById('text-style-preview');preview.style.setProperty('--preview-text-color',color);preview.style.setProperty('--preview-font-weight',bold?'700':'400');preview.style.setProperty('--preview-font-style',italic?'italic':'normal');
+    const warning=document.getElementById('contrast-warning');const opacity=Number(activeNotePreferences.opacity??100)/100;
+    const paper=[255,249,223],desktop=[239,238,233],blended='#'+paper.map((value,index)=>Math.round(value*opacity+desktop[index]*(1-opacity)).toString(16).padStart(2,'0')).join('');
+    const lowContrast=contrastRatio(color,blended)<4.5;
+    warning.textContent=activeNotePreferences.backgroundImageData?'文字与图片背景的反差可能不足，请以便签上的实际预览效果为准。':'文字颜色与当前纸面反差较低，建议调整颜色或透明度。';
+    warning.classList.toggle('visible',lowContrast);
+  }
+  async function saveNotePreferences(patch,bindingID=activeBindingId){
+    if(activeBindingId===bindingID){activeNotePreferences={...activeNotePreferences,...patch};applyNotePreferences(activeNotePreferences);}
+    if(!nativeHostAvailable||!bindingID)return;
+    try{const result=await nativeRequest('notes.setPreferences',{bindingId:bindingID,patch});if(activeBindingId===bindingID){activeNotePreferences=result.preferences;applyNotePreferences(result.preferences);}}
+    catch(error){notify(`设置未保存：${error.message}`);}
+  }
+  function renderFixedTaskList(){
+    const list=document.getElementById('fixed-task-list');if(!list)return;list.replaceChildren();
+    const tasks=activeNotePreferences.fixedTasks||[];
+    if(!tasks.length){const empty=document.createElement('div');empty.className='fixed-task-empty';empty.textContent=activeBindingId?'还没有固定事项。':'请先打开一张便签，再管理这张便签的固定事项。';list.append(empty);}
+    tasks.forEach(task=>{
+      const row=document.createElement('div');row.className='fixed-task-row';
+      const info=document.createElement('div');info.className='fixed-task-info';
+      const name=document.createElement('div');name.className='fixed-task-name';name.textContent=task.title;
+      const meta=document.createElement('div');meta.className='fixed-task-meta';meta.textContent=[task.priorityName,task.plannedDurationHours?`${task.plannedDurationHours}h`:null].filter(Boolean).join(' · ');
+      info.append(name,meta);
+      const actions=document.createElement('div');actions.className='fixed-task-actions';
+      const retryDate=failedFixedOccurrenceDates.get(task.id);
+      if(retryDate){
+        const retry=document.createElement('button');retry.className='fixed-task-retry';retry.type='button';retry.textContent='重试写入';retry.setAttribute('aria-label',`重试创建固定事项：${task.title}`);
+        retry.addEventListener('click',()=>createFixedTaskOccurrence(task.id,retryDate));actions.append(retry);
+      }
+      const edit=document.createElement('button');edit.type='button';edit.textContent='编辑';edit.setAttribute('aria-label',`编辑固定事项：${task.title}`);edit.addEventListener('click',()=>beginEditFixedTask(task));
+      const remove=document.createElement('button');remove.type='button';remove.textContent='删除';remove.setAttribute('aria-label',`删除固定事项：${task.title}`);
+      remove.addEventListener('click',()=>persistFixedTasks(tasks.filter(item=>item.id!==task.id)));
+      edit.disabled=remove.disabled=!activeBindingId||!nativeHostAvailable;
+      actions.append(edit,remove);row.append(info,actions);list.append(row);
+    });
+  }
+  async function loadFixedTaskOptions(selectedOptionID=''){
+    const select=document.getElementById('fixed-task-priority');const add=document.getElementById('fixed-task-add');const error=document.getElementById('fixed-task-error');
+    select.replaceChildren(new Option('正在读取优先级…',''));select.disabled=true;add.disabled=true;error.textContent='';
+    if(!nativeHostAvailable||!activeBindingId){select.replaceChildren(new Option('请先打开便签',''));error.textContent='固定事项按便签分别保存。';return;}
+    try{
+      const result=await nativeRequest('notes.createTaskOptions',{bindingId:activeBindingId});
+      fixedPriorityOptions=result.options||[];fixedPlannedDurationAvailable=Boolean(result.plannedDurationAvailable);
+      select.replaceChildren(new Option('选择优先级',''));
+      fixedPriorityOptions.forEach(option=>select.append(new Option(option.name,option.id)));
+      select.value=selectedOptionID;
+      select.disabled=false;document.getElementById('fixed-task-duration').hidden=!fixedPlannedDurationAvailable;add.disabled=false;
+    }catch(error){select.replaceChildren(new Option('无法读取优先级',''));error.textContent=`暂时无法读取字段选项：${error.message}`;}
+  }
+  function resetFixedTaskForm(){
+    editingFixedTaskID=null;document.getElementById('fixed-task-form').reset();
+    document.getElementById('fixed-task-form').hidden=true;
+    document.getElementById('fixed-task-show-form').hidden=false;
+    document.getElementById('fixed-task-add').textContent='添加固定事项';
+    document.getElementById('fixed-task-edit-cancel').hidden=true;
+    document.getElementById('fixed-task-error').textContent='';
+  }
+  function beginEditFixedTask(task){
+    editingFixedTaskID=task.id;document.getElementById('fixed-task-name').value=task.title;
+    document.getElementById('fixed-task-duration').value=task.plannedDurationHours||'';
+    document.getElementById('fixed-task-show-form').hidden=true;
+    document.getElementById('fixed-task-form').hidden=false;
+    document.getElementById('fixed-task-add').textContent='保存修改';
+    document.getElementById('fixed-task-edit-cancel').hidden=false;
+    loadFixedTaskOptions(task.priorityOptionID).then(()=>document.getElementById('fixed-task-name').focus());
+  }
+  async function createFixedTaskOccurrence(templateID,dateKey){
+    const bindingID=activeBindingId;const error=document.getElementById('fixed-task-error');
+    if(!bindingID||!nativeHostAvailable)return;
+    try{
+      const result=await nativeRequest('notes.createFixedTaskOccurrence',{bindingId:bindingID,templateId:templateID,dateKey});
+      failedFixedOccurrenceDates.delete(templateID);
+      if(activeBindingId===bindingID)applyNativeSnapshot(result.snapshot);
+      renderFixedTaskList();error.textContent=result.warning||'';
+    }catch(cause){
+      failedFixedOccurrenceDates.set(templateID,dateKey);renderFixedTaskList();
+      error.textContent=`固定事项已保存，但未能创建当天任务：${cause.message}。可点击“重试写入”。`;
+    }
+  }
+  async function persistFixedTasks(tasks,{createdTemplateID=null,occurrenceDateKey=selectedDateKey}={}){
+    if(!activeBindingId||!nativeHostAvailable)return;
+    const bindingID=activeBindingId;const previous=activeNotePreferences.fixedTasks||[];const error=document.getElementById('fixed-task-error');
+    activeNotePreferences={...activeNotePreferences,fixedTasks:tasks};renderFixedTaskList();error.textContent='';
+    try{
+      const saved=await nativeRequest('notes.setPreferences',{bindingId:bindingID,patch:{fixedTasks:tasks}});
+      if(activeBindingId===bindingID){activeNotePreferences=saved.preferences;renderFixedTaskList();}
+    }catch(cause){
+      if(activeBindingId===bindingID){activeNotePreferences={...activeNotePreferences,fixedTasks:previous};renderFixedTaskList();error.textContent=`固定待办未保存：${cause.message}`;}
+      return false;
+    }
+    if(createdTemplateID)await createFixedTaskOccurrence(createdTemplateID,occurrenceDateKey);
+    return true;
+  }
+  document.getElementById('fixed-task-form').addEventListener('submit',event=>{
+    event.preventDefault();const nameInput=document.getElementById('fixed-task-name');const priority=document.getElementById('fixed-task-priority');const durationInput=document.getElementById('fixed-task-duration');const error=document.getElementById('fixed-task-error');
+    const title=nameInput.value.trim();const option=fixedPriorityOptions.find(item=>item.id===priority.value);const raw=durationInput.value.trim();const duration=raw?Number(raw):null;
+    if(!title){error.textContent='请输入固定待办内容。';nameInput.focus();return;}
+    if(!option){error.textContent='请选择优先级。';priority.focus();return;}
+    if(duration!==null&&(!Number.isFinite(duration)||duration<0.5||duration*2!==Math.round(duration*2))){error.textContent='计划时长需以 0.5 小时为单位。';durationInput.focus();return;}
+    const previous=activeNotePreferences.fixedTasks||[];
+    const template=editingFixedTaskID?previous.find(item=>item.id===editingFixedTaskID):null;
+    const next={id:template?.id||(window.crypto?.randomUUID?window.crypto.randomUUID():`fixed-${Date.now()}-${Math.random().toString(36).slice(2)}`),title,priorityOptionID:option.id,priorityName:option.name,plannedDurationHours:fixedPlannedDurationAvailable?duration:null};
+    const tasks=template?previous.map(item=>item.id===template.id?next:item):[...previous,next];
+    persistFixedTasks(tasks,{createdTemplateID:template?null:next.id,occurrenceDateKey:selectedDateKey}).then(saved=>{if(saved)resetFixedTaskForm();});
+  });
+  document.getElementById('font-cn').addEventListener('change',event=>saveNotePreferences({fontCN:event.target.value}));
+  document.getElementById('font-en').addEventListener('change',event=>saveNotePreferences({fontEN:event.target.value}));
+  document.getElementById('text-color-scope').addEventListener('change',event=>saveNotePreferences({textColorScope:event.target.value}));
+  document.getElementById('text-color-options').addEventListener('click',event=>{const button=event.target.closest('.text-color-swatch');if(button)saveNotePreferences({textColor:button.dataset.color});});
+  document.getElementById('text-color-custom').addEventListener('input',event=>{activeNotePreferences={...activeNotePreferences,textColor:event.target.value.toUpperCase()};applyNotePreferences(activeNotePreferences);});
+  document.getElementById('text-color-custom').addEventListener('change',event=>saveNotePreferences({textColor:event.target.value.toUpperCase()}));
+  document.getElementById('text-bold-toggle').addEventListener('click',()=>saveNotePreferences({textBold:!activeNotePreferences.textBold}));
+  document.getElementById('text-italic-toggle').addEventListener('click',()=>saveNotePreferences({textItalic:!activeNotePreferences.textItalic}));
+  document.getElementById('reset-text-style').addEventListener('click',()=>saveNotePreferences({textColor:'#454239',textColorScope:'task',textBold:false,textItalic:false}));
+  document.getElementById('opacity-range').addEventListener('input',event=>{const value=Number(event.target.value);const bindingID=activeBindingId;applyNotePreferences({...activeNotePreferences,opacity:value});clearTimeout(opacitySaveTimer);opacitySaveTimer=setTimeout(()=>saveNotePreferences({opacity:value},bindingID),350);});
+  document.getElementById('background-upload').addEventListener('change',event=>{const file=event.target.files[0];if(!file)return;if(file.size>5*1024*1024){notify('背景图片不能超过 5 MB');event.target.value='';return;}if(!['image/png','image/jpeg','image/webp'].includes(file.type)){notify('请选择 PNG、JPEG 或 WebP 图片');event.target.value='';return;}const reader=new FileReader();reader.onload=()=>{saveNotePreferences({backgroundImageData:reader.result});event.target.value='';};reader.onerror=()=>{notify('读取图片失败，请重新选择');event.target.value='';};reader.readAsDataURL(file);});
+  document.getElementById('clear-background').addEventListener('click',async()=>{
+    document.getElementById('background-upload').value='';
+    const bindingID=activeBindingId;
+    const previousPreferences={...activeNotePreferences};
+    activeNotePreferences={...activeNotePreferences,backgroundImageData:null};
+    applyNotePreferences(activeNotePreferences);
+    if(!nativeHostAvailable||!bindingID)return;
+    try{
+      const result=await nativeRequest('notes.setPreferences',{bindingId:bindingID,patch:{removeBackground:true}});
+      if(activeBindingId===bindingID)applyNotePreferences(result.preferences);
+    }catch(error){
+      if(activeBindingId===bindingID)applyNotePreferences(previousPreferences);
+      notify(`背景图片未移除：${error.message}`);
+    }
+  });
+  function notify(message) { const el=document.getElementById('toast'); el.textContent=message; el.classList.add('show'); clearTimeout(timer); timer=setTimeout(()=>el.classList.remove('show'),1700); }
+  function refresh() { moreMenu.classList.remove('open');if(nativeHostAvailable){refreshActiveNote();return;} }
+  async function sendPendingCompletion(bindingId,recordId){
+    const mutationKey=completionQueueKey(activeAccountKey,bindingId,recordId);const queue=nativeCompletionQueues.get(mutationKey);
+    if(!activeAccountKey||!queue||queue.accountKey!==activeAccountKey||queue.running)return;
+    if(!navigator.onLine){networkUnavailable=true;updateNetworkIndicator();return;}
+    queue.running=true;
+    try{
+      while(queue.confirmed!==queue.desired&&navigator.onLine&&activeAccountKey===queue.accountKey){
+        const target=queue.desired;
+        const mutationId=window.crypto?.randomUUID?window.crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        try{
+          const result=await nativeRequest('todos.setDone',{accountKey:queue.accountKey,bindingId,recordId,done:target,mutationId});
+          queue.confirmed=target;queue.snapshot=result.snapshot;
+          if(activeAccountKey===queue.accountKey&&activeBindingId===bindingId&&queue.confirmed===queue.desired)applyNativeCompletionSnapshot({...result.snapshot,stale:Boolean(result.stale)},recordId);
+          if(result.warning)notify(result.warning);
+        }catch(error){
+          if(['AUTH_REQUIRED','ACCOUNT_MISMATCH'].includes(error.code)){
+            queue.blocked=true;
+            queue.blockedReason=error.code==='AUTH_REQUIRED'?'auth':'account';
+            persistPendingCompletions();
+            networkUnavailable=true;
+            updateNetworkIndicator();
+            notify('离线状态已保留；请切回对应飞书账号后重试。');
+            return;
+          }
+          if(error.code==='MUTATION_IN_PROGRESS')return;
+          if(error.code==='STALE_SNAPSHOT'){
+            try{
+              const refreshed=await nativeRequest('notes.refresh',{bindingId,reason:'pending-completion-reconcile'});
+              if(refreshed.snapshot){
+                queue.running=false;
+                reconcilePendingCompletions(queue.accountKey,bindingId,refreshed.snapshot);
+                if(activeAccountKey===queue.accountKey&&activeBindingId===bindingId)applyNativeSnapshot(refreshed.snapshot);
+                if(refreshed.snapshot.stale){networkUnavailable=true;updateNetworkIndicator();}
+                else if(nativeCompletionQueues.get(mutationKey)?.blocked)notify('一条待写回状态对应的任务已不在当前视图，操作仍保留在本机。请检查飞书视图或删除该便签。');
+              }
+            }catch{
+              networkUnavailable=true;updateNetworkIndicator();
+            }
+            return;
+          }
+          if(isNetworkFailure(error)){
+            networkUnavailable=true;updateNetworkIndicator();scheduleCompletionRetry();
+            return;
+          }
+          queue.desired=queue.confirmed;if(activeAccountKey===queue.accountKey&&activeBindingId===bindingId)nativeTodoItems=nativeTodoItems.map(todo=>todo.id===recordId?{...todo,isDone:queue.confirmed}:todo);
+          nativeCompletionQueues.delete(mutationKey);persistPendingCompletions();
+          if(activeAccountKey===queue.accountKey&&activeBindingId===bindingId)renderNativePage();
+          notify(`写回失败：${error.message}`);
+          return;
+        }
+      }
+    }finally{
+      queue.running=false;
+      if(queue.confirmed===queue.desired){nativeCompletionQueues.delete(mutationKey);persistPendingCompletions();}
+      if(!hasActiveAccountPending()&&navigator.onLine)networkUnavailable=false;
+      updateNetworkIndicator();
+      if([...nativeCompletionQueues.values()].some(item=>item.accountKey===activeAccountKey&&!item.blocked)&&navigator.onLine)scheduleCompletionRetry();
+    }
+  }
+  function flushPendingCompletions(){if(!navigator.onLine||!activeAccountKey)return;if(nativeSnapshotStale&&activeBindingId){scheduleCompletionRetry();refreshActiveNote();return;}for(const queue of nativeCompletionQueues.values())if(queue.accountKey===activeAccountKey&&!queue.blocked)sendPendingCompletion(queue.bindingId,queue.recordId);}
+  async function setNativeCompletion(input,isDone){
+    const row=input.closest('.task');const recordId=row?.dataset.recordId;const bindingId=row?.dataset.bindingId||activeBindingId;
+    if(!recordId||!bindingId||!activeAccountKey){input.checked=!isDone;notify('找不到当前飞书账号、便签或任务记录。');return;}
+    const mutationKey=completionQueueKey(activeAccountKey,bindingId,recordId);
+    if(deletingTaskKeys.has(mutationKey)){input.checked=!isDone;return;}
+    const item=nativeTodoItems.find(todo=>todo.id===recordId);
+    if(!item)return;
+    if(isDone&&nativeHostAvailable)nativeRequest('focus.completeTask',{bindingId,taskId:recordId}).catch(()=>{});
+    let queue=nativeCompletionQueues.get(mutationKey);
+    if(!queue){queue={accountKey:activeAccountKey,bindingId,recordId,confirmed:Boolean(item.isDone),desired:Boolean(isDone),running:false,snapshot:null};nativeCompletionQueues.set(mutationKey,queue);}
+    queue.desired=Boolean(isDone);
+    nativeTodoItems=nativeTodoItems.map(todo=>todo.id===recordId?{...todo,isDone:queue.desired}:todo);
+    persistPendingCompletions();renderNativePage();
+    if(!navigator.onLine||nativeSnapshotStale){networkUnavailable=true;updateNetworkIndicator();if(navigator.onLine)refreshActiveNote();return;}
+    sendPendingCompletion(bindingId,recordId);
+  }
+  function completeTask(input) { if(nativeHostAvailable){setNativeCompletion(input,true);return;}if(!input.checked) return;const row=input.closest('.task');row.classList.add('done');input.onchange=()=>undoTask(input);document.querySelector('#completed-list .task-list').appendChild(row);document.getElementById('completed-list').open=true;updateProgress(); }
+  function undoTask(input) { if(nativeHostAvailable){setNativeCompletion(input,false);return;}if(input.checked) return;const row=input.closest('.task');row.classList.remove('done');input.onchange=()=>completeTask(input);document.getElementById('active-list').appendChild(row);updateProgress(); }
+  function updateProgress() { const done=document.querySelectorAll('.task.done').length; const total=document.querySelectorAll('.task').length; document.getElementById('progress-label').textContent=`${done} / ${total} 完成`; document.getElementById('progress-bar').style.width=`${total?done/total*100:0}%`; document.getElementById('done-count').textContent=`${done} 项`; }
+  function toast(message) { notify(message); }
+</script>
+</body>
+</html>

@@ -1,0 +1,802 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>飞书桌面便签 · 前端原型</title>
+<style>
+  :root { color-scheme: light; --ink:#35443f; --muted:#7d8984; --line:#c9d7d1; --accent:#718f81; --paper:#eef0e4; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:grid; place-items:center; background:#ecece9; font:14px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",sans-serif; color:var(--ink); }
+  .desktop { width:min(1100px,94vw); height:min(760px,90vh); position:relative; border:1px solid #fff; border-radius:18px; background:#e3e4e1; box-shadow:0 24px 65px #30362e20; overflow:hidden; }
+  .note.is-empty .title { display:none; }
+  .note.is-empty .title-row { justify-content:flex-end; }
+  .note.is-empty .drag { display:none; }
+  .note.is-empty .note-head { padding:10px 12px 0; border-bottom:0; }
+  .note.is-empty .progress,.note.is-empty #active-list,.note.is-empty .completed,.note.is-empty .foot { display:none; }
+  .note.is-empty .date-switcher { display:none!important; }
+  .note-empty { flex:1; display:flex; align-items:center; justify-content:center; padding:20px 26px 34px; text-align:center; color:#77786e; }
+  .note-empty[hidden] { display:none; }
+  .note-empty-content { width:100%; max-width:250px; font-size:14px; letter-spacing:.2px; line-height:1.7; }
+  .closed-note-content { display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .closed-note-content[hidden] { display:none; }
+  .closed-note-content strong { color:#54554c; font-size:14px; font-weight:620; }
+  .closed-note-content span { color:#858478; font-size:11px; }
+  .closed-note-content button { margin-top:5px; }
+  .auth-empty { display:flex; flex-direction:column; align-items:center; }
+  .auth-empty[hidden] { display:none; }
+  .auth-mark { display:grid; place-items:center; width:34px; height:34px; margin-bottom:13px; border:1px solid #e5dec6; border-radius:10px; color:#71836a; background:#fffdf3; }
+  .auth-mark svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+  .auth-title { margin:0; color:#454239; font-size:15px; font-weight:620; letter-spacing:0; line-height:1.45; }
+  .auth-description { max-width:220px; margin:7px 0 16px; color:#777367; font-size:11px; line-height:1.6; }
+  .auth-account { margin:-7px 0 13px; color:#777367; font-size:10.5px; }
+  .auth-primary { display:flex; align-items:center; justify-content:center; min-width:156px; min-height:36px; padding:0 16px; border:1px solid #71856e; border-radius:7px; color:#fffdf5; background:#71856e; font:600 11.5px -apple-system,BlinkMacSystemFont,sans-serif; cursor:pointer; transition:background-color .15s ease,border-color .15s ease,transform .15s ease; }
+  .auth-primary:hover { border-color:#5f755f; background:#5f755f; }
+  .auth-primary:active { transform:translateY(1px); }
+  .auth-primary:focus-visible { outline:2px solid #8ea082; outline-offset:3px; }
+  .auth-primary:disabled { cursor:wait; opacity:.78; }
+  .auth-note { max-width:218px; margin:13px 0 0; color:#8a8577; font-size:9.5px; line-height:1.55; }
+  .auth-status { min-height:15px; margin:11px 0 0; color:#766f60; font-size:10px; }
+  .auth-empty.is-authorizing .auth-mark { animation:auth-pulse 1.5s ease-in-out infinite; }
+  .auth-empty.is-authorizing .auth-status { color:#64795f; }
+  .auth-empty.is-error .auth-status { color:#a35f4c; }
+  @keyframes auth-pulse { 50% { box-shadow:0 0 0 4px #71836a15; } }
+  @media(prefers-reduced-motion:reduce) { .auth-empty.is-authorizing .auth-mark { animation:none; } .auth-primary { transition:none; } }
+  .note-empty-hint { margin-top:8px; color:#a09f95; font-size:11px; }
+  .empty-hint { margin-top:8px; color:#a09f95; font-size:11px; }
+  .note.is-empty .more-menu .menu-item:not(#open-notebook),.note.is-empty .more-menu .menu-separator { display:none; }
+  .dialog-backdrop { position:absolute; z-index:80; inset:0; display:none; place-items:center; background:#22251f45; }
+  .dialog-backdrop.open { display:grid; }
+  .dialog { width:min(390px,calc(100% - 40px)); padding:20px; border:1px solid #e4e4dc; border-radius:13px; background:#fafaf4; box-shadow:0 15px 45px #171a1640; transform:rotate(-.3deg); }
+  .dialog h2 { margin:0 0 5px; color:#45483f; font-size:15px; font-weight:650; }
+  .dialog p { margin:0 0 15px; color:#858478; font-size:11px; }
+  .dialog input[type=url] { width:100%; height:36px; padding:0 10px; border:1px solid #d7dbd0; border-radius:7px; outline:none; color:#424840; background:#fffef9; font:12px -apple-system,sans-serif; }
+  .dialog input[type=url]:focus { border-color:#8a9c8d; box-shadow:0 0 0 2px #8a9c8d24; }
+  .dialog-error { min-height:18px; margin-top:6px; color:#a35f4c; font-size:11px; }
+  .dialog-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:14px; }
+  .dialog-button { padding:7px 12px; border:1px solid #d9ddd2; border-radius:7px; color:#596159; background:#f6f7f0; font:12px -apple-system,sans-serif; cursor:pointer; }
+  .dialog-button.primary { border-color:#738d7d; color:#fff; background:#738d7d; }
+  .notebook-list { display:grid; gap:6px; max-height:310px; overflow:auto; }
+  .notebook-entry { display:flex; justify-content:space-between; align-items:center; padding:10px; border:1px solid #e2e4da; border-radius:8px; background:#fffef9; }
+  .notebook-entry strong { display:block; color:#4b5149; font-size:12px; font-weight:600; }
+  .notebook-entry small { display:block; max-width:220px; overflow:hidden; color:#99978b; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+  .notebook-entry button { border:0; color:#718879; background:transparent; font:11px -apple-system,sans-serif; cursor:pointer; }
+  .notebook-entry button:disabled { color:#a7a69b; cursor:default; }
+  .notebook-entry-actions { display:flex; flex:none; align-items:center; gap:8px; margin-left:8px; }
+  .note { position:absolute; left:112px; top:118px; width:310px; height:390px; min-width:270px; min-height:260px; display:flex; flex-direction:column; border-radius:11px; background:transparent; box-shadow:0 7px 17px #34382b24,0 1px 2px #34382b18; overflow:visible; transform:rotate(-1.2deg); transform-origin:center; isolation:isolate; --paper-opacity:1; --paper-image:none; --font-cn:"PingFang SC"; --font-en:-apple-system; }
+  .note.pinned { box-shadow:0 10px 24px #34382b38,0 1px 2px #34382b18; }
+  .note-secondary { pointer-events:none; box-shadow:0 6px 15px #34382b20,0 1px 2px #34382b16; }
+  .note-secondary .date-switcher,.note-secondary .resize-handle,.note-secondary .progress { display:none!important; }
+  .note:before { content:""; position:absolute; z-index:-1; inset:0; border-radius:inherit; background-color:var(--paper); background-image:var(--paper-image); background-position:center; background-size:cover; opacity:var(--paper-opacity); pointer-events:none; }
+  /* 八个透明热区让四边和四角都可以拖拽缩放；静止时不影响便签外观。 */
+  .resize-handle { position:absolute; z-index:10; touch-action:none; }
+  .resize-handle.n,.resize-handle.s { left:10px; right:10px; height:7px; cursor:ns-resize; }
+  .resize-handle.n { top:-3px; } .resize-handle.s { bottom:-3px; }
+  .resize-handle.e,.resize-handle.w { top:10px; bottom:10px; width:7px; cursor:ew-resize; }
+  .resize-handle.e { right:-3px; } .resize-handle.w { left:-3px; }
+  .resize-handle.ne,.resize-handle.nw,.resize-handle.se,.resize-handle.sw { width:13px; height:13px; }
+  .resize-handle.ne { top:-4px; right:-4px; cursor:nesw-resize; }
+  .resize-handle.nw { top:-4px; left:-4px; cursor:nwse-resize; }
+  .resize-handle.se { bottom:-4px; right:-4px; cursor:nwse-resize; }
+  .resize-handle.sw { bottom:-4px; left:-4px; cursor:nesw-resize; }
+  .note-head { padding:15px 17px 12px; background:transparent; border-bottom:1px solid #d9ded3; }
+  .drag { display:flex; justify-content:center; margin:-5px 0 11px; }
+  .drag i { width:28px; height:3px; border-radius:3px; background:#c3c9bd; }
+  .title-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .title { font-size:16px; font-weight:650; letter-spacing:.1px; }
+  .actions { display:flex; gap:5px; color:#918a7c; position:relative; }
+  .icon { display:flex; align-items:center; justify-content:center; padding:0; border:0; background:transparent; color:inherit; width:25px; height:25px; border-radius:6px; cursor:pointer; }
+  .ellipsis-mark { display:flex; align-items:center; justify-content:center; gap:2px; width:12px; height:12px; }
+  .ellipsis-mark i { display:block; width:2.5px; height:2.5px; border-radius:50%; background:currentColor; }
+  .icon:hover { background:#dfe3d8; }
+  .add-note-icon { color:#627b69; font-size:20px; line-height:1; }
+  .more-menu,.personalize-panel { display:none; position:absolute; right:0; top:31px; z-index:30; padding:5px; border:1px solid #d9ded3; border-radius:8px; background:#fbfbf5; box-shadow:0 8px 22px #34382b25; transform:rotate(1.2deg); }
+  .more-menu.open,.personalize-panel.open { display:block; }
+  .more-menu { width:178px; }
+  .menu-item { width:100%; display:flex; justify-content:space-between; align-items:center; border:0; border-radius:5px; padding:8px 9px; color:#45483f; background:transparent; text-align:left; font:inherit; font-size:12px; cursor:pointer; }
+  .menu-item:hover { background:#eef0e4; }
+  .menu-item:disabled { color:#b5b4aa; cursor:not-allowed; }
+  .menu-item:disabled:hover { background:transparent; }
+  .menu-separator { height:1px; margin:4px 5px; background:#e4e5da; }
+  .personalize-panel { width:250px; padding:13px; color:#45483f; font-size:11px; }
+  .personalize-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:11px; font-size:12px; font-weight:600; }
+  .personalize-close { border:0; background:transparent; color:#797d73; cursor:pointer; font-size:16px; }
+  .setting { display:grid; gap:5px; margin:9px 0; }
+  .setting-label { color:#777b70; }
+  .setting select,.setting input[type="range"] { width:100%; }
+  .select-wrap { position:relative; width:100%; }
+  .select-wrap:after { content:""; position:absolute; right:10px; top:50%; width:6px; height:6px; border-right:1.4px solid #777b70; border-bottom:1.4px solid #777b70; transform:translateY(-70%) rotate(45deg); pointer-events:none; }
+  .setting select { appearance:none; -webkit-appearance:none; width:100%; padding:6px 28px 6px 7px; border:1px solid #d9ded3; border-radius:5px; background:#fffef9; color:#45483f; font:inherit; font-size:11px; cursor:pointer; }
+  .upload-button { display:block; padding:7px; border:1px dashed #b9bdae; border-radius:5px; text-align:center; cursor:pointer; color:#626a5e; }
+  .upload-button:hover { background:#f1f2e9; }
+  .file-input { display:none; }
+  .subtitle { margin-top:4px; color:var(--muted); font-size:11px; }
+  .progress { display:flex; align-items:center; gap:8px; margin-top:13px; color:#777064; font-size:11px; }
+  .bar { height:3px; flex:1; border-radius:3px; background:#d8ddd2; overflow:hidden; }
+  .bar span { display:block; height:100%; width:38%; border-radius:3px; background:#849a78; }
+  .task-list { padding:7px 16px 0; overflow:auto; min-height:0; }
+  .task { display:flex; align-items:flex-start; gap:10px; padding:11px 2px; border-bottom:1px solid #dce1d7; cursor:pointer; }
+  .check { appearance:none; flex:0 0 16px; width:16px; height:16px; margin:2px 0 0; border:1.4px solid #9da99e; border-radius:50%; background:#f8f8f1; cursor:pointer; position:relative; }
+  .check:checked { background:#849a78; border-color:#849a78; }
+  .check:checked:after { content:""; position:absolute; left:50%; top:46%; width:4px; height:7px; border-right:1.5px solid white; border-bottom:1.5px solid white; transform:translate(-50%,-50%) rotate(45deg); }
+  .task-text { flex:1; min-width:0; font-size:13px; line-height:1.45; }
+  .task-text .cn-text { font-family:var(--font-cn),sans-serif; }
+  .task-text .en-text { font-family:var(--font-en),sans-serif; }
+  .task.done .task-text { color:#9a9385; text-decoration:line-through; }
+  .priority { flex:0 0 auto; color:#6e8171; font-size:10px; padding-top:2px; }
+  .priority.high { color:#9d705e; }
+  .completed { margin:7px 16px 0; border-top:1px solid var(--line); flex:0 0 auto; }
+  .completed summary { padding:12px 1px; list-style:none; display:flex; align-items:center; justify-content:space-between; color:#807868; font-size:11px; cursor:pointer; }
+  .completed summary::-webkit-details-marker { display:none; }
+  .completed summary:before { content:"▸"; margin-right:7px; color:#82917e; }
+  .completed[open] summary:before { content:"▾"; }
+  .summary-left { margin-right:auto; }
+  .count { color:#a49a84; }
+  .completed .task-list { padding:0 0 5px; }
+  .completed .task { padding:8px 1px; }
+  .foot { padding:10px 18px 14px; display:flex; justify-content:space-between; align-items:center; color:#76918a; font-size:10px; flex:0 0 auto; }
+  .link { border:0; padding:0; color:#647b68; background:none; font:inherit; cursor:pointer; }
+  .toast { position:absolute; bottom:24px; right:25px; padding:9px 13px; border-radius:9px; color:#fff; background:#37342e; box-shadow:0 4px 18px #0003; opacity:0; transform:translateY(7px); transition:.2s; font-size:12px; }
+  .toast.show { opacity:1; transform:translateY(0); }
+  .date-switcher { display:flex; align-items:center; justify-content:center; margin:8px 0 0; }
+  .date-switcher button { height:25px; border:1px solid #e7e0cc; color:#5a574d; background:#fff9e8; font:13px/1 -apple-system,BlinkMacSystemFont,sans-serif; cursor:pointer; }
+  .date-switcher button:hover { background:#f5efd9; }
+  .date-switcher button:focus-visible { outline:2px solid #85947b; outline-offset:2px; }
+  .date-step { width:27px; font-size:20px!important; }
+  .date-step svg { display:block; width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  #previous-day { border-radius:7px 0 0 7px; }
+  #next-day { border-radius:0 7px 7px 0; }
+  .date-today { min-width:56px; padding:0 10px; border-right:0!important; border-left:0!important; border-radius:0; font-size:11px!important; font-weight:550!important; }
+  @media(max-width:700px) { .note { left:16px; top:65px; width:min(310px,calc(100% - 32px)); } }
+
+  /* 桌面便签样式：用温和的纸色和清晰排版托住任务，不依赖纹理或装饰图案。 */
+  :root {
+    --ink:#39372f;
+    --muted:#777367;
+    --line:#e8e1c9;
+    --accent:#687f6b;
+    --paper:#fff9df;
+  }
+  body { background:#efeee9; color:var(--ink); }
+  .desktop {
+    border:1px solid #f8f7f2;
+    border-radius:20px;
+    background:#e8e7e1;
+    box-shadow:0 20px 48px #39372f12;
+  }
+  .note {
+    border-radius:14px;
+    box-shadow:0 9px 24px #53492b20, 0 2px 5px #53492b0d;
+    transform:none;
+    transform-origin:center;
+  }
+  .note:before {
+    border:1px solid #eee5c8;
+    border-radius:inherit;
+    background-color:var(--paper);
+  }
+  .note.pinned { box-shadow:0 11px 26px #53492b27, 0 2px 5px #53492b0d; }
+  .note-head { padding:15px 16px 13px; border-bottom:1px solid #e9e2cb; }
+  .drag { margin:-5px 0 10px; }
+  .drag i { width:26px; height:3px; background:#d6cfb8; }
+  .title { color:#3f3b31; font-size:15px; font-weight:650; letter-spacing:0; }
+  .actions { gap:4px; color:#77715f; }
+  .icon { width:28px; height:28px; border-radius:7px; transition:background-color .15s ease,color .15s ease; }
+  .icon:hover { background:#f0e9ce; color:#45483f; }
+  .add-note-icon { color:#637a64; font-size:21px; font-weight:400; }
+  .progress { gap:9px; margin-top:12px; color:#777263; font-size:10px; }
+  .bar { height:3px; background:#e8e1cc; }
+  .bar span { background:#89977a; }
+  .task-list { padding:5px 16px 0; }
+  .task { gap:9px; padding:10px 1px; border-bottom:1px solid #eee8d7; }
+  .check {
+    flex-basis:16px;
+    width:16px;
+    height:16px;
+    margin:2px 0 0;
+    border:1.4px solid #aaa58f;
+    background:#fffdf5;
+  }
+  .check:checked { border-color:#71856d; background:#71856d; }
+  .check:checked:after { left:50%; top:48%; width:4px; height:7px; }
+  .task-text { color:#454239; font-size:12.5px; line-height:1.5; }
+  .task.done .task-text { color:#969181; }
+  .priority {
+    padding:2px 6px;
+    border-radius:4px;
+    background:#f0ecd9;
+    color:#77715f;
+    font-size:9px;
+    line-height:1.4;
+  }
+  .priority.high { background:#f5e5dc; color:#98644e; }
+  .completed { margin:6px 16px 0; border-top:1px solid #e9e2cb; }
+  .completed summary { padding:11px 1px; color:#6e6a5e; font-size:10.5px; }
+  .completed summary:before { color:#78866e; }
+  .count { color:#827c6b; }
+  .completed .task { padding:8px 1px; }
+  .foot { padding:9px 17px 12px; color:#817b6b; font-size:10px; }
+  #sync-state:before {
+    content:"";
+    display:inline-block;
+    width:6px;
+    height:6px;
+    margin:0 6px 1px 0;
+    border-radius:50%;
+    background:#879477;
+  }
+  .more-menu,.personalize-panel {
+    border-color:#e9e2cf;
+    border-radius:9px;
+    background:#fffdf5;
+    box-shadow:0 8px 22px #403a291c;
+    transform:none;
+  }
+  .menu-item { border-radius:6px; color:#464339; font-size:11.5px; }
+  .menu-item:hover { background:#f3efdf; }
+  .menu-item:disabled { color:#aaa696; }
+  .menu-separator { background:#eee9da; }
+  .personalize-panel { color:#454239; }
+  .personalize-head { color:#3f3b31; }
+  .personalize-close { width:24px; height:24px; border-radius:6px; }
+  .personalize-close:hover { background:#f3efdf; }
+  .setting-label { color:#6e6a5e; }
+  .select-wrap:after { border-color:#777263; }
+  .setting select,.dialog input[type=url] {
+    border-color:#ded8c6;
+    border-radius:6px;
+    background:#fffefa;
+    color:#403d34;
+  }
+  .setting select:focus,.dialog input[type=url]:focus { border-color:#85947b; outline:none; box-shadow:0 0 0 2px #85947b22; }
+  .upload-button { border-color:#c9c3ad; border-radius:6px; color:#5f6758; }
+  .upload-button:hover { background:#f7f3e6; }
+  .dialog-backdrop { background:#302e2745; }
+  .dialog {
+    padding:20px;
+    border-color:#e8e1ce;
+    border-radius:12px;
+    background:#fffdf6;
+    box-shadow:0 16px 42px #24211838;
+    transform:none;
+  }
+  .dialog h2 { color:#3f3b31; font-size:15px; }
+  .dialog p { color:#716d61; font-size:11px; line-height:1.55; }
+  .dialog-button { border-color:#ded9ca; border-radius:6px; color:#514e43; background:#f7f5ed; }
+  .dialog-button:hover { background:#eeece1; }
+  .dialog-button.primary { border-color:#6f846e; background:#6f846e; }
+  .dialog-button.primary:hover { border-color:#5e745e; background:#5e745e; }
+  .field-mapping { display:none; max-height:260px; overflow:auto; margin-top:10px; padding:10px; border:1px solid #e8e3d6; border-radius:8px; background:#fbfaf5; }
+  .field-mapping.open { display:grid; gap:9px; }
+  .field-row { display:grid; grid-template-columns:90px 1fr; align-items:center; gap:8px; color:#706d62; font-size:11px; }
+  .field-row select { width:100%; min-width:0; height:30px; padding:0 8px; border:1px solid #ded8c6; border-radius:6px; color:#403d34; background:#fffefa; font:11px -apple-system,sans-serif; }
+  .field-row select:focus { border-color:#85947b; outline:none; box-shadow:0 0 0 2px #85947b22; }
+  .field-note { color:#858174; font-size:10px; line-height:1.5; }
+  .empty-hint { padding:12px 2px; color:#8c887b; font-size:11px; text-align:center; }
+  .notebook-entry { border-color:#e9e3d3; border-radius:7px; background:#fffefa; }
+  .notebook-entry strong { color:#454239; }
+  .notebook-entry small { color:#777367; }
+  .notebook-entry button,.link { color:#617a64; }
+  .note-empty { color:#716d61; }
+  .note-empty-content { max-width:230px; color:#5c5a50; font-size:13px; line-height:1.65; }
+  .note-empty-hint,.empty-hint { color:#7f7b6f; }
+  .toast { border-radius:7px; background:#37362f; box-shadow:0 5px 16px #24211830; }
+  .resize-handle.n,.resize-handle.s { cursor:ns-resize; }
+  @media(max-width:700px) {
+    .desktop { border-radius:0; box-shadow:none; }
+    .note { border-radius:14px; }
+  }
+  .date-switcher { gap:0; }
+  .calendar-open { margin-right:7px; border-radius:7px!important; }
+  .calendar-page { display:none; width:100%; min-height:0; flex:1; flex-direction:column; }
+  .note.is-calendar .note-empty { display:flex; flex:1; min-height:0; padding:12px 15px 14px; align-items:stretch; justify-content:flex-start; text-align:left; }
+  .note.is-calendar #active-list,.note.is-calendar .completed,.note.is-calendar .foot,.note.is-calendar .progress,.note.is-calendar .date-switcher { display:none!important; }
+  .note.is-calendar #calendar-page { display:flex; }
+  .note.is-calendar:not(.is-empty) .title { display:block; }
+  .note.is-calendar:not(.is-empty) .title-row { justify-content:space-between; }
+  .note.is-calendar .calendar-onboarding { display:none; }
+  .note.is-empty.is-calendar .calendar-onboarding { display:flex; }
+  .note.is-calendar .closed-note-content { display:none; }
+  .calendar-month-nav { display:flex; height:28px; flex:0 0 auto; align-items:center; gap:7px; }
+  .calendar-month-title { flex:1; color:#454239; font-size:13px; font-weight:620; text-align:center; }
+  .calendar-month-step,.calendar-today { display:grid; place-items:center; height:27px; border:1px solid #e7e0cc; border-radius:7px; color:#5a574d; background:#fff9e8; font:14px/1 -apple-system,BlinkMacSystemFont,sans-serif; cursor:pointer; }
+  .calendar-month-step { width:27px; font-size:19px; }
+  .calendar-month-step:hover,.calendar-today:hover { background:#f5efd9; }
+  .calendar-today { padding:0 9px; font-size:10px; }
+  .calendar-weekdays,.calendar-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); align-items:center; text-align:center; }
+  .calendar-weekdays { height:22px; flex:0 0 auto; color:#8c8675; font-size:9px; }
+  .calendar-grid { grid-auto-rows:minmax(28px,1fr); flex:1 1 auto; min-height:168px; }
+  .calendar-day { justify-self:center; display:grid; place-items:center; width:28px; height:28px; padding:0; border:0; border-radius:50%; color:#514d42; background:transparent; font:11px -apple-system,BlinkMacSystemFont,sans-serif; cursor:pointer; }
+  .calendar-day:hover { background:#f1ebd5; }
+  .calendar-day.is-adjacent { color:#b0aa98; }
+  .calendar-day.is-today { box-shadow:inset 0 0 0 1px #9ba78c; }
+  .calendar-day.is-selected { color:#fffdf5; background:#71856d; font-weight:650; }
+  .calendar-day.is-selected.is-today { box-shadow:inset 0 0 0 1px #71856d,0 0 0 2px #71856d35; }
+  .calendar-onboarding { display:none; flex:0 0 auto; justify-content:center; padding-top:7px; }
+  .calendar-onboarding .auth-empty { width:100%; max-width:none; gap:0; }
+  .calendar-onboarding .auth-mark,.calendar-onboarding .auth-description,.calendar-onboarding .auth-note { display:none; }
+  .calendar-onboarding .auth-title { max-width:100%; font-size:11px; line-height:1.4; text-align:center; }
+  .calendar-onboarding .auth-account { margin:2px 0 5px; font-size:9px; }
+  .calendar-onboarding .auth-primary { min-width:132px; min-height:30px; margin-top:6px; font-size:10px; }
+  .calendar-onboarding .auth-status { min-height:12px; margin:2px 0 0; font-size:9px; }
+  @media(max-height:340px) {
+    .note.is-calendar .note-empty { padding-top:7px; padding-bottom:7px; }
+    .calendar-grid { grid-auto-rows:25px; min-height:150px; }
+    .calendar-day { width:24px; height:24px; }
+    .calendar-onboarding { padding-top:3px; }
+    .calendar-onboarding .auth-primary { min-height:26px; margin-top:3px; }
+  }
+</style>
+</head>
+<body>
+  <main class="desktop" aria-label="桌面浮窗原型">
+    <section class="note is-empty is-calendar" id="note">
+      <header class="note-head" id="drag-handle">
+        <div class="drag"><i></i></div>
+        <div class="title-row">
+          <div class="title" id="note-title">10/14 待办</div>
+          <div class="actions" aria-label="便签操作">
+            <button class="icon add-note-icon" id="add-note" title="新建便签" aria-label="新建便签">+</button>
+            <button class="icon" id="more-button" title="更多" aria-label="更多"><span class="ellipsis-mark" aria-hidden="true"><i></i><i></i><i></i></span></button>
+            <div class="more-menu" id="more-menu">
+              <button class="menu-item" onclick="togglePin()"><span id="pin-label">置顶</span></button>
+              <button class="menu-item" onclick="refresh()">刷新</button>
+              <button class="menu-item" onclick="closeCurrentPage()">关闭当前页</button>
+              <button class="menu-item" onclick="toast('便签已隐藏（原型预览）')">隐藏</button>
+              <button class="menu-item" id="open-source-button">在飞书中打开</button>
+              <div class="menu-separator"></div>
+              <button class="menu-item" id="personalize-button">个性化…</button>
+              <div class="menu-separator"></div>
+              <button class="menu-item" id="open-notebook">便签夹</button>
+              <div class="menu-separator"></div>
+              <button class="menu-item" id="delete-note-button" onclick="deleteCurrentNote()" disabled>删除便签</button>
+            </div>
+            <section class="personalize-panel" id="personalize-panel" aria-label="个性化设置">
+              <div class="personalize-head"><span>个性化</span><button class="personalize-close" id="personalize-close" aria-label="关闭">×</button></div>
+              <label class="setting"><span class="setting-label">背景图片</span><span class="upload-button">选择图片<input class="file-input" id="background-upload" type="file" accept="image/*"></span></label>
+              <label class="setting"><span class="setting-label">纸面透明度 <span id="opacity-value">100%</span></span><input id="opacity-range" type="range" min="35" max="100" value="100"></label>
+              <label class="setting"><span class="setting-label">中文字体</span><span class="select-wrap"><select id="font-cn"><option value="PingFang SC">苹方</option><option value="Songti SC">宋体</option><option value="Kaiti SC">楷体</option><option value="system-ui">系统字体</option></select></span></label>
+              <label class="setting"><span class="setting-label">英文字体</span><span class="select-wrap"><select id="font-en"><option value="-apple-system">SF 系统字体</option><option value="Georgia">Georgia</option><option value="Helvetica Neue">Helvetica Neue</option><option value="Menlo">Menlo</option></select></span></label>
+              <button class="menu-item" id="clear-background">移除背景图片</button>
+            </section>
+          </div>
+        </div>
+        <div class="date-switcher" id="date-switcher" role="group" aria-label="切换待办日期">
+          <button class="date-step calendar-open" id="open-calendar" type="button" title="打开月历" aria-label="打开月历"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2.5" y="4" width="11" height="9.5" rx="1.5"/><path d="M5 2.5v3M11 2.5v3M2.5 7h11"/></svg></button>
+          <button class="date-step" id="previous-day" type="button" title="前一天" aria-label="前一天"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m10 3-5 5 5 5"/></svg></button>
+          <button class="date-today" id="return-today" type="button" title="返回今天">今天</button>
+          <button class="date-step" id="next-day" type="button" title="后一天" aria-label="后一天"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5"/></svg></button>
+        </div>
+        <div class="progress"><span id="progress-label">1 / 4 完成</span><div class="bar"><span id="progress-bar"></span></div><span>↗</span></div>
+      </header>
+
+      <div class="note-empty" id="empty-note-content">
+        <section class="calendar-page" id="calendar-page" aria-label="按月选择日期">
+          <div class="calendar-month-nav">
+            <button class="calendar-month-step" id="previous-month" type="button" aria-label="上个月" title="上个月">‹</button>
+            <strong class="calendar-month-title" id="calendar-month-title"></strong>
+            <button class="calendar-month-step" id="next-month" type="button" aria-label="下个月" title="下个月">›</button>
+            <button class="calendar-today" id="calendar-today" type="button">今天</button>
+          </div>
+          <div class="calendar-weekdays" aria-hidden="true"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+          <div class="calendar-grid" id="calendar-grid" role="grid" aria-label="日期"></div>
+          <div class="calendar-onboarding" id="calendar-onboarding">
+        <div class="note-empty-content auth-empty" id="auth-empty" aria-live="polite" aria-atomic="true">
+          <span class="auth-mark" aria-hidden="true">
+            <svg viewBox="0 0 20 20"><path d="M7.2 12.8 5.8 14.2a3.1 3.1 0 0 1-4.4-4.4l3.2-3.2a3.1 3.1 0 0 1 4.4 0"/><path d="m12.8 7.2 1.4-1.4a3.1 3.1 0 1 1 4.4 4.4l-3.2 3.2a3.1 3.1 0 0 1-4.4 0"/><path d="m7.3 12.7 5.4-5.4"/></svg>
+          </span>
+          <h1 class="auth-title" id="auth-title"></h1>
+          <p class="auth-description" id="auth-description">授权后，选择一个多维表格视图贴到桌面。</p>
+          <p class="auth-account" id="auth-account" hidden></p>
+          <button class="auth-primary" id="auth-action" type="button">连接飞书账号</button>
+          <p class="auth-note" id="auth-note">Todo 会读取视图任务，并在你勾选时更新完成状态。</p>
+          <p class="auth-status" id="auth-status" role="status"></p>
+        </div>
+          </div>
+        </section>
+        <div class="note-empty-content closed-note-content" id="closed-note-content" hidden>
+          <strong>便签已关闭</strong>
+          <span>已绑定的视图仍保留在便签夹中。</span>
+          <button class="auth-primary" id="closed-open-notebook" type="button">打开便签夹</button>
+        </div>
+      </div>
+
+      <div class="task-list" id="active-list">
+        <label class="task"><input class="check" type="checkbox" onchange="completeTask(this)"><span class="task-text">确认首页改版的最终文案</span><span class="priority high">高</span></label>
+        <label class="task"><input class="check" type="checkbox" onchange="completeTask(this)"><span class="task-text">完成周会材料并同步给团队</span><span class="priority high">高</span></label>
+        <label class="task"><input class="check" type="checkbox" onchange="completeTask(this)"><span class="task-text">检查多维表格视图字段配置</span><span class="priority">中</span></label>
+        <label class="task"><input class="check" type="checkbox" onchange="completeTask(this)"><span class="task-text">整理本周用户反馈</span><span class="priority">低</span></label>
+      </div>
+
+      <details class="completed" id="completed-list">
+        <summary><span class="summary-left">已完成</span><span class="count" id="done-count">1 项</span></summary>
+        <div class="task-list">
+          <label class="task done"><input class="check" type="checkbox" checked onchange="undoTask(this)"><span class="task-text">整理昨天的需求评审记录</span><span class="priority">中</span></label>
+        </div>
+      </details>
+      <footer class="foot"><span id="sync-state">刚刚同步</span></footer>
+      <span class="resize-handle n" data-edge="n" aria-hidden="true"></span>
+      <span class="resize-handle e" data-edge="e" aria-hidden="true"></span>
+      <span class="resize-handle s" data-edge="s" aria-hidden="true"></span>
+      <span class="resize-handle w" data-edge="w" aria-hidden="true"></span>
+      <span class="resize-handle ne" data-edge="ne" aria-hidden="true"></span>
+      <span class="resize-handle nw" data-edge="nw" aria-hidden="true"></span>
+      <span class="resize-handle se" data-edge="se" aria-hidden="true"></span>
+      <span class="resize-handle sw" data-edge="sw" aria-hidden="true"></span>
+    </section>
+    <div class="dialog-backdrop" id="bind-dialog"><form class="dialog" id="bind-form"><h2>绑定一个视图</h2><p>粘贴飞书多维表格中的视图链接。任务仍在飞书中添加和管理。</p><input id="view-url" type="url" placeholder="https://xxx.feishu.cn/base/...?table=...&view=..." autocomplete="url"><div class="field-mapping" id="field-mapping"></div><div class="dialog-error" id="bind-error"></div><div class="dialog-actions"><button type="button" class="dialog-button" id="bind-cancel">取消</button><button type="submit" class="dialog-button primary" id="bind-submit">读取视图字段</button></div></form></div>
+    <div class="dialog-backdrop" id="notebook-dialog"><section class="dialog"><h2>便签夹</h2><p>当前飞书账号下创建且未删除的便签</p><div class="notebook-list" id="notebook-list"></div><div class="dialog-actions"><button class="dialog-button" id="notebook-close">关闭</button></div></section></div>
+    <div class="toast" id="toast"></div>
+  </main>
+<script>
+  let timer;
+  // 独立 HTML 仍用于原型预览；macOS 应用的绑定状态由原生宿主响应。
+  const nativeHostAvailable=Boolean(window.webkit?.messageHandlers?.todoHost);
+  const pendingNativeRequests=new Map();
+  let pendingViewURL='';
+  let bindingInspection=null;
+  let nativeTodoItems=[];
+  let nativeSnapshotStale=false;
+  let nativeHasSnapshot=false;
+  let nativeLoadError='';
+  let activeNotePreferences={opacity:100,fontCN:'PingFang SC',fontEN:'-apple-system'};
+  let opacitySaveTimer=null;
+  const nativeMutationInFlight=new Set();
+  window.__todoNativeReceive=response=>{
+    const pending=pendingNativeRequests.get(response.requestId);
+    if(!pending)return;
+    pendingNativeRequests.delete(response.requestId);
+    if(response.ok)pending.resolve(response.result||{});
+    else pending.reject(Object.assign(new Error(response.error?.message||'桌面操作失败。'),{code:response.error?.code||'NATIVE_ERROR'}));
+  };
+  function nativeRequest(method,params={}){
+    return new Promise((resolve,reject)=>{
+      const requestId=window.crypto?.randomUUID?window.crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      pendingNativeRequests.set(requestId,{resolve,reject});
+      window.webkit.messageHandlers.todoHost.postMessage({protocolVersion:1,requestId,method,params});
+    });
+  }
+  let authState='unconnected', authDisplayName='', authErrorMessage='';
+  function renderAuthState(){
+    const panel=document.getElementById('auth-empty');
+    const title=document.getElementById('auth-title');
+    const description=document.getElementById('auth-description');
+    const account=document.getElementById('auth-account');
+    const action=document.getElementById('auth-action');
+    const note=document.getElementById('auth-note');
+    const status=document.getElementById('auth-status');
+    panel.classList.toggle('is-authorizing',authState==='authorizing');
+    panel.classList.toggle('is-error',authState==='error');
+    account.hidden=authState!=='connected';
+    status.textContent='';
+    action.disabled=authState==='authorizing';
+    if(authState==='connected'){
+      title.textContent='飞书账号已连接';
+      description.textContent='绑定一个多维表格视图，把待办带到桌面。';
+      account.textContent=`当前账号：${authDisplayName||'飞书用户'}`;
+      action.textContent='绑定多维表格';
+      note.textContent='任务保存在飞书多维表格中，勾选状态会写回原记录。';
+    }else if(authState==='authorizing'){
+      title.textContent='正在连接飞书';
+      description.textContent='请在浏览器中的飞书页面完成授权，完成后会自动返回 Todo。';
+      action.textContent='等待授权完成…';
+      note.textContent='如果浏览器没有打开，请稍等片刻后再试。';
+      status.textContent='正在等待飞书授权';
+    }else if(authState==='error'){
+      title.textContent='没有完成连接';
+      description.textContent='飞书授权未完成。你可以重新发起授权，或检查浏览器中的授权结果。';
+      action.textContent='重新连接飞书';
+      note.textContent='授权成功后即可继续绑定多维表格。';
+      status.textContent=authErrorMessage||'授权已取消或暂时无法完成。';
+    }else{
+      title.textContent='';
+      description.textContent='授权后，选择一个多维表格视图贴到桌面。';
+      action.textContent='连接飞书账号';
+      note.textContent='Todo 会读取视图任务，并在你勾选时更新完成状态。';
+    }
+  }
+  function startFeishuAuthorization(){
+    if(authState==='authorizing')return;
+    document.getElementById('more-menu').classList.remove('open');
+    authState='authorizing';authErrorMessage='';renderAuthState();
+    if(nativeHostAvailable){
+      nativeRequest('auth.start').catch(error=>{authState='error';authErrorMessage=error.message;renderAuthState();});
+      return;
+    }
+    // 独立 HTML 的预览模拟：展示完整的授权中与授权成功状态，不会调用真实飞书接口。
+    window.setTimeout(()=>{authState='connected';authDisplayName='示例飞书账号';renderAuthState();toast('原型演示：飞书账号已连接');},1200);
+  }
+  window.__todoNativeEvent=message=>{
+    const payload=message?.payload||{};
+    if(message?.event==='auth.started'){authState='authorizing';renderAuthState();}
+    if(message?.event==='auth.completed'){authState='connected';authDisplayName=payload.displayName||'飞书用户';authErrorMessage='';renderAuthState();restoreNativeNotebook().catch(error=>toast(error.message));}
+    if(message?.event==='auth.failed'){authState='error';authErrorMessage=payload.message||'';renderAuthState();}
+    if(message?.event==='auth.signedOut'){authState='unconnected';authDisplayName='';replaceNotebookItems([],null);nativeTodoItems=[];nativeHasSnapshot=false;nativeSnapshotStale=false;nativeLoadError='';document.getElementById('note').classList.add('is-empty','is-calendar');document.getElementById('empty-note-content').hidden=false;document.getElementById('auth-empty').hidden=false;document.getElementById('closed-note-content').hidden=true;renderAuthState();renderCalendar();}
+  };
+  document.getElementById('auth-action').addEventListener('click',()=>{
+    if(authState==='connected')showBindDialog();
+    else startFeishuAuthorization();
+  });
+  const localNotebook=[];
+  let activeBindingId=null;
+  let selectedDateKey=localDateKey(new Date());
+  let calendarMonthDate=new Date(new Date().getFullYear(),new Date().getMonth(),1);
+  function updateDeleteAvailability(){const button=document.getElementById('delete-note-button');if(button)button.disabled=localNotebook.length<=1||!activeBindingId;}
+  function replaceNotebookItems(items,activeID){localNotebook.splice(0,localNotebook.length,...(items||[]));activeBindingId=activeID||null;updateDeleteAvailability();}
+  function resetFieldMapping(){bindingInspection=null;const panel=document.getElementById('field-mapping');panel.innerHTML='';panel.classList.remove('open');document.getElementById('bind-submit').textContent='读取视图字段';}
+  function showBindDialog(){if(authState!=='connected'){startFeishuAuthorization();return;}document.getElementById('more-menu').classList.remove('open');document.getElementById('bind-error').textContent='';resetFieldMapping();document.getElementById('view-url').value=nativeHostAvailable?pendingViewURL:'';document.getElementById('bind-dialog').classList.add('open');setTimeout(()=>document.getElementById('view-url').focus(),30);}
+  function renderFieldMapping(inspection){
+    bindingInspection=inspection;
+    const panel=document.getElementById('field-mapping');panel.innerHTML='';panel.classList.add('open');
+    const fields=inspection.fields||[];
+    const addSelect=(id,label,choices,placeholder)=>{
+      const row=document.createElement('label');row.className='field-row';const caption=document.createElement('span');caption.textContent=label;
+      const select=document.createElement('select');select.id=id;select.required=true;
+      const empty=document.createElement('option');empty.value='';empty.textContent=placeholder;select.append(empty);
+      choices.forEach(field=>{const option=document.createElement('option');option.value=field.id;option.textContent=field.name;select.append(option);});
+      row.append(caption,select);panel.append(row);return select;
+    };
+    const textFields=fields.filter(field=>field.type===1),dateFields=fields.filter(field=>field.type===5),singleFields=fields.filter(field=>field.type===3);
+    addSelect('map-task-field','任务内容',textFields,'选择文本字段');
+    addSelect('map-date-field','所属日期',dateFields,'选择日期字段');
+    addSelect('map-priority-field','优先级',singleFields,'选择单选字段');
+    const doneSelect=addSelect('map-done-field','完成状态',singleFields,'选择单选字段');
+    const optionRow=document.createElement('div');optionRow.className='field-row';const optionCaption=document.createElement('span');optionCaption.textContent='状态选项';
+    const optionWrap=document.createElement('div');optionWrap.style.display='grid';optionWrap.style.gridTemplateColumns='1fr 1fr';optionWrap.style.gap='6px';
+    const doneOption=document.createElement('select');doneOption.id='map-done-option';doneOption.required=true;const undoneOption=document.createElement('select');undoneOption.id='map-undone-option';undoneOption.required=true;
+    optionWrap.append(doneOption,undoneOption);optionRow.append(optionCaption,optionWrap);panel.append(optionRow);
+    const updateOptions=()=>{
+      doneOption.innerHTML='';undoneOption.innerHTML='';
+      const field=fields.find(item=>item.id===doneSelect.value);const options=field?.options||[];
+      [[doneOption,'已完成'],[undoneOption,'未完成']].forEach(([select,name])=>{const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=`选择${name}`;select.append(placeholder);options.filter(item=>item.name===name).forEach(item=>{const option=document.createElement('option');option.value=item.id;option.textContent=item.name;select.append(option);});});
+      if(options.some(item=>item.name==='已完成'))doneOption.value=options.find(item=>item.name==='已完成').id;
+      if(options.some(item=>item.name==='未完成'))undoneOption.value=options.find(item=>item.name==='未完成').id;
+    };
+    doneSelect.addEventListener('change',updateOptions);updateOptions();
+    const hint=document.createElement('div');hint.className='field-note';hint.textContent=`已读取视图“${inspection.viewName||'多维表格视图'}”的字段。请明确选择字段；任务顺序沿用飞书视图。`;panel.append(hint);
+    document.getElementById('bind-submit').textContent='建立便签';
+  }
+  function renderNotebook(entries=localNotebook){
+    const list=document.getElementById('notebook-list');list.innerHTML='';
+    if(!entries.length){list.innerHTML='<div class="empty-hint">还没有便签，点击 + 绑定一个视图。</div>';return;}
+    entries.forEach(entry=>{
+      const row=document.createElement('div');row.className='notebook-entry';
+      const info=document.createElement('div');const title=document.createElement('strong');title.textContent=entry.name;
+      const url=document.createElement('small');url.textContent=entry.url;info.append(title,url);
+      const actions=document.createElement('div');actions.className='notebook-entry-actions';
+      const open=document.createElement('button');open.textContent=entry.id===activeBindingId?'当前便签':'打开';open.disabled=entry.id===activeBindingId;
+      open.addEventListener('click',async()=>{
+        if(nativeHostAvailable){open.disabled=true;open.textContent='正在验证…';try{
+          const result=await nativeRequest('notebook.open',{bindingId:entry.id});
+          replaceNotebookItems(entries,result.activeBindingId);nativeHasSnapshot=false;nativeTodoItems=[];nativeSnapshotStale=false;nativeLoadError='';
+          showBoundNote();applyNotePreferences(result.preferences);applyNativeSnapshot(result.snapshot);document.getElementById('notebook-dialog').classList.remove('open');
+        }catch(error){open.disabled=false;open.textContent='打开';toast(`打开失败，当前便签未切换：${error.message}`);}return;}
+        if(!/^https:\/\/[\w.-]+\.feishu\.cn\/(base|wiki)\//i.test(entry.url)){toast('打开失败：视图链接无效');return;}
+        entry.open=true;activeBindingId=entry.id;showBoundNote();renderNotebook();document.getElementById('notebook-dialog').classList.remove('open');
+      });
+      const remove=document.createElement('button');remove.textContent='删除';remove.disabled=entries.length<=1;
+      remove.addEventListener('click',()=>deleteBindingFromNotebook(entry.id));
+      actions.append(open,remove);row.append(info,actions);list.appendChild(row);
+    });
+  }
+  function renderAdditionalNoteCards(){document.querySelectorAll('.note-secondary').forEach(card=>card.remove());}
+  function showBoundNote(){const sticky=document.getElementById('note');sticky.hidden=false;sticky.classList.remove('is-empty','is-calendar');document.getElementById('empty-note-content').hidden=true;document.getElementById('closed-note-content').hidden=true;updateDateHeader();if(nativeHostAvailable)renderNativePage();else renderPrototypeDate();renderAdditionalNoteCards();}
+  function showClosedNote(){const sticky=document.getElementById('note');sticky.hidden=false;sticky.classList.add('is-empty');sticky.classList.remove('is-calendar');document.getElementById('empty-note-content').hidden=false;document.getElementById('auth-empty').hidden=true;document.getElementById('closed-note-content').hidden=false;document.getElementById('more-menu').classList.remove('open');document.getElementById('personalize-panel').classList.remove('open');updateDeleteAvailability();}
+  function showInitialEmptyState(){const sticky=document.getElementById('note');sticky.hidden=false;sticky.classList.add('is-empty','is-calendar');sticky.style.setProperty('--paper-image','none');document.getElementById('empty-note-content').hidden=false;document.getElementById('auth-empty').hidden=false;document.getElementById('closed-note-content').hidden=true;document.getElementById('more-menu').classList.remove('open');document.getElementById('personalize-panel').classList.remove('open');renderAuthState();renderCalendar();updateDeleteAvailability();}
+  async function restoreNativeNotebook(){if(!nativeHostAvailable)return;const notebook=await nativeRequest('notes.list');replaceNotebookItems(notebook.items||[],notebook.activeBindingId);if(activeBindingId){const active=localNotebook.find(item=>item.id===activeBindingId);if(active){showBoundNote();const result=await nativeRequest('notes.getPreferences',{bindingId:active.id});applyNotePreferences(result.preferences);if(active.snapshot)applyNativeSnapshot(active.snapshot);await refreshActiveNote();}else showClosedNote();}else if(localNotebook.length){showClosedNote();}else showInitialEmptyState();}
+  document.getElementById('add-note').addEventListener('click',showBindDialog);
+  async function openNotebook(){document.getElementById('more-menu').classList.remove('open');if(nativeHostAvailable){try{const result=await nativeRequest('notebook.list');replaceNotebookItems(result.items||[],result.activeBindingId);renderNotebook();}catch(error){toast(error.message);return;}}else renderNotebook();document.getElementById('notebook-dialog').classList.add('open');}
+  document.getElementById('open-notebook').addEventListener('click',openNotebook);
+  document.getElementById('closed-open-notebook').addEventListener('click',openNotebook);
+  document.getElementById('bind-cancel').addEventListener('click',()=>document.getElementById('bind-dialog').classList.remove('open'));
+  document.getElementById('view-url').addEventListener('input',()=>{if(bindingInspection)resetFieldMapping();});
+  document.getElementById('notebook-close').addEventListener('click',()=>document.getElementById('notebook-dialog').classList.remove('open'));
+  document.getElementById('bind-form').addEventListener('submit',async event=>{
+    event.preventDefault();const url=document.getElementById('view-url').value.trim();const errorLabel=document.getElementById('bind-error');errorLabel.textContent='';
+    if(nativeHostAvailable){
+      try{
+        if(!bindingInspection){
+          document.getElementById('bind-submit').disabled=true;document.getElementById('bind-submit').textContent='正在读取…';
+          bindingInspection=await nativeRequest('notes.inspectBinding',{viewUrl:url});renderFieldMapping(bindingInspection);return;
+        }
+        const fieldMapping={taskFieldID:document.getElementById('map-task-field').value,dateFieldID:document.getElementById('map-date-field').value,priorityFieldID:document.getElementById('map-priority-field').value,doneFieldID:document.getElementById('map-done-field').value,doneOptionID:document.getElementById('map-done-option').value,undoneOptionID:document.getElementById('map-undone-option').value};
+        if(Object.values(fieldMapping).some(value=>!value)){errorLabel.textContent='请完成所有字段选择。';return;}
+        document.getElementById('bind-submit').disabled=true;document.getElementById('bind-submit').textContent='正在绑定…';
+        const result=await nativeRequest('notes.createBinding',{viewUrl:url,fieldMapping});pendingViewURL='';
+        const chosenDate=selectedDateKey;const entry={...result.binding,open:true,isActive:true,snapshot:result.snapshot};localNotebook.push(entry);activeBindingId=entry.id;applyNativeSnapshot(result.snapshot);document.getElementById('bind-dialog').classList.remove('open');showBoundNote();applyNotePreferences({...result.preferences,selectedDate:chosenDate});await saveNotePreferences({selectedDate:chosenDate},entry.id);updateDeleteAvailability();toast('已读取飞书视图并建立便签');
+      }catch(error){errorLabel.textContent=error.message;}
+      finally{document.getElementById('bind-submit').disabled=false;document.getElementById('bind-submit').textContent=bindingInspection?'建立便签':'读取视图字段';}
+      return;
+    }
+    let parsed;try{parsed=new URL(url);}catch{errorLabel.textContent='请粘贴有效的飞书多维表格视图链接。';return;}const viewId=parsed.searchParams.get('view')||parsed.searchParams.get('view_id');const tableId=parsed.searchParams.get('table')||parsed.searchParams.get('table_id');if(!/\.feishu\.cn$/i.test(parsed.hostname)||!/(\/base\/|\/wiki\/)/.test(parsed.pathname)||!viewId||!tableId){errorLabel.textContent='链接需包含飞书 Base、table 和 view 信息。';return;}if(localNotebook.some(entry=>entry.viewId===viewId)){errorLabel.textContent='这个视图已在便签夹中。';return;}const id=`note-${Date.now()}`;localNotebook.push({id,viewId,url,name:`${formatDate(dateFromKey(selectedDateKey))} 待办`,open:true});activeBindingId=id;document.getElementById('bind-dialog').classList.remove('open');showBoundNote();updateDeleteAvailability();toast(localNotebook.length===1?'已添加便签（原型任务为示例数据）':'已添加第二张便签（原型交互预览）');
+  });
+  async function closeCurrentPage(){document.getElementById('more-menu').classList.remove('open');if(nativeHostAvailable){if(!activeBindingId)return;try{await nativeRequest('notes.closeCurrent',{bindingId:activeBindingId});activeBindingId=null;selectedDateKey=localDateKey(new Date());showClosedNote();toast('当前便签已关闭，仍保留在便签夹');}catch(error){toast(`关闭失败：${error.message}`);}return;}const entry=localNotebook.find(item=>item.id===activeBindingId);if(entry)entry.open=false;activeBindingId=null;selectedDateKey=localDateKey(new Date());showClosedNote();renderNotebook();toast('已关闭当前页；便签仍保留在便签夹');}
+  window.__todoCloseCurrentPage=closeCurrentPage;
+  function deleteCurrentNote(){if(!activeBindingId){toast('请先打开要删除的便签');return;}deleteBindingFromNotebook(activeBindingId);}
+  async function deleteBindingFromNotebook(bindingID){
+    if(localNotebook.length<=1){toast('仅剩一张便签，不能删除；可以关闭当前页');return;}
+    if(!window.confirm('仅从本机便签夹删除这张便签及其缓存？飞书视图和任务不会被删除。'))return;
+    document.getElementById('more-menu').classList.remove('open');
+    const wasActive=activeBindingId===bindingID;
+    if(nativeHostAvailable){try{
+      const result=await nativeRequest('notes.deleteBinding',{bindingId:bindingID});
+      replaceNotebookItems(result.items||[],result.activeBindingId);
+      if(wasActive){nativeTodoItems=[];nativeHasSnapshot=false;nativeSnapshotStale=false;nativeLoadError='';showClosedNote();}
+      renderNotebook();
+      if(result.warning)toast(result.warning);else toast('已从本机便签夹删除，不影响飞书数据');
+    }catch(error){toast(`删除失败：${error.message}`);}return;}
+    const index=localNotebook.findIndex(item=>item.id===bindingID);if(index>=0)localNotebook.splice(index,1);
+    if(wasActive){activeBindingId=null;showClosedNote();}
+    renderNotebook();updateDeleteAvailability();toast('已从本机便签夹删除，不影响飞书数据');
+  }
+  document.getElementById('note').addEventListener('contextmenu',()=>{ /* 原型保留浏览器原生菜单；正式版由 AppKit 注入“上一页/关闭当前页”。 */ });
+  const note=document.getElementById('note');
+  const dragHandle=document.getElementById('drag-handle');
+  let dragging=false, resizing=false, startX=0, startY=0, baseLeft=0, baseTop=0, baseWidth=0, baseHeight=0, resizeEdge='';
+  dragHandle.addEventListener('pointerdown',event=>{
+    if(event.target.closest('button,input,select,label,.more-menu,.personalize-panel')) return;
+    dragging=true; dragHandle.setPointerCapture(event.pointerId);
+    const rect=note.getBoundingClientRect(); const parent=note.parentElement.getBoundingClientRect();
+    note.style.left=`${rect.left-parent.left}px`; note.style.top=`${rect.top-parent.top}px`;
+    startX=event.clientX; startY=event.clientY; baseLeft=parseFloat(note.style.left); baseTop=parseFloat(note.style.top);
+  });
+  dragHandle.addEventListener('pointermove',event=>{ if(!dragging)return; note.style.left=`${baseLeft+event.clientX-startX}px`; note.style.top=`${baseTop+event.clientY-startY}px`; });
+  dragHandle.addEventListener('pointerup',()=>dragging=false);
+  // 四边和四角分别调整窗口位置及尺寸，宽高都不会低于便签最小尺寸。
+  document.querySelectorAll('.resize-handle').forEach(handle=>{
+    handle.addEventListener('pointerdown',event=>{
+      resizing=true; resizeEdge=handle.dataset.edge; handle.setPointerCapture(event.pointerId);
+      const rect=note.getBoundingClientRect(); const parent=note.parentElement.getBoundingClientRect();
+      baseLeft=rect.left-parent.left; baseTop=rect.top-parent.top; baseWidth=rect.width; baseHeight=rect.height;
+      startX=event.clientX; startY=event.clientY; event.preventDefault(); event.stopPropagation();
+    });
+    handle.addEventListener('pointermove',event=>{
+      if(!resizing)return;
+      const dx=event.clientX-startX, dy=event.clientY-startY;
+      let left=baseLeft, top=baseTop, width=baseWidth, height=baseHeight;
+      if(resizeEdge.includes('e')) width=Math.max(270,baseWidth+dx);
+      if(resizeEdge.includes('s')) height=Math.max(260,baseHeight+dy);
+      if(resizeEdge.includes('w')) { width=Math.max(270,baseWidth-dx); left=baseLeft+baseWidth-width; }
+      if(resizeEdge.includes('n')) { height=Math.max(260,baseHeight-dy); top=baseTop+baseHeight-height; }
+      note.style.left=`${left}px`; note.style.top=`${top}px`; note.style.width=`${width}px`; note.style.height=`${height}px`;
+    });
+    handle.addEventListener('pointerup',()=>{resizing=false;resizeEdge='';});
+    handle.addEventListener('lostpointercapture',()=>{resizing=false;resizeEdge='';});
+  });
+  let prototypeTaskMarkup=null;
+  if(nativeHostAvailable){document.getElementById('active-list').replaceChildren();document.querySelector('#completed-list .task-list').replaceChildren();document.getElementById('sync-state').textContent='等待飞书数据';}
+  function localDateKey(date){return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;}
+  function dayKey(milliseconds){return localDateKey(new Date(milliseconds));}
+  function dateFromKey(key){const [year,month,day]=key.split('-').map(Number);return new Date(year,month-1,day);}
+  function formatDate(date=new Date()){return `${date.getMonth()+1}/${String(date.getDate()).padStart(2,'0')}`;}
+  function monthStart(date){return new Date(date.getFullYear(),date.getMonth(),1);}
+  function renderCalendar(){
+    const year=calendarMonthDate.getFullYear(),month=calendarMonthDate.getMonth();
+    document.getElementById('calendar-month-title').textContent=`${year}年${month+1}月`;
+    const grid=document.getElementById('calendar-grid');grid.replaceChildren();
+    const offset=(new Date(year,month,1).getDay()+6)%7,day=new Date(year,month,1-offset),todayKey=localDateKey(new Date());
+    for(let index=0;index<42;index++){
+      const key=localDateKey(day),button=document.createElement('button');
+      button.type='button';button.className='calendar-day';button.textContent=String(day.getDate());
+      button.setAttribute('role','gridcell');button.setAttribute('aria-label',`${day.getFullYear()}年${day.getMonth()+1}月${day.getDate()}日`);
+      button.setAttribute('aria-pressed',String(key===selectedDateKey));
+      if(day.getMonth()!==month)button.classList.add('is-adjacent');
+      if(key===todayKey){button.classList.add('is-today');button.title='今天';}
+      if(key===selectedDateKey)button.classList.add('is-selected');
+      button.addEventListener('click',()=>selectCalendarDate(key));grid.append(button);day.setDate(day.getDate()+1);
+    }
+  }
+  function changeCalendarMonth(offset){calendarMonthDate=new Date(calendarMonthDate.getFullYear(),calendarMonthDate.getMonth()+offset,1);renderCalendar();}
+  function selectCalendarDate(dateKey){
+    selectedDateKey=dateKey;calendarMonthDate=monthStart(dateFromKey(dateKey));updateDateHeader();renderCalendar();
+    if(activeBindingId){showBoundNote();if(nativeHostAvailable)renderNativePage();else renderPrototypeDate();saveNotePreferences({selectedDate:selectedDateKey});}
+  }
+  function selectCalendarToday(){
+    selectedDateKey=localDateKey(new Date());calendarMonthDate=monthStart(new Date());updateDateHeader();renderCalendar();
+    if(activeBindingId){if(nativeHostAvailable)renderNativePage();else renderPrototypeDate();saveNotePreferences({selectedDate:selectedDateKey});}
+  }
+  function openCalendar(){
+    if(!activeBindingId){showInitialEmptyState();return;}
+    calendarMonthDate=monthStart(dateFromKey(selectedDateKey));renderCalendar();
+    const sticky=document.getElementById('note');sticky.classList.add('is-calendar');sticky.classList.remove('is-empty');
+    document.getElementById('empty-note-content').hidden=false;document.getElementById('closed-note-content').hidden=true;
+    document.getElementById('note-title').textContent='日历';
+  }
+  document.getElementById('previous-month').addEventListener('click',()=>changeCalendarMonth(-1));
+  document.getElementById('next-month').addEventListener('click',()=>changeCalendarMonth(1));
+  document.getElementById('calendar-today').addEventListener('click',selectCalendarToday);
+  document.getElementById('open-calendar').addEventListener('click',openCalendar);
+  renderCalendar();
+  function updateDateHeader(){const title=document.getElementById('note-title');if(note.classList.contains('is-calendar')&&!note.classList.contains('is-empty')){title.textContent='日历';return;}title.textContent=`${formatDate(dateFromKey(selectedDateKey))} 待办`;}
+  function shiftSelectedDate(offset){const date=dateFromKey(selectedDateKey);date.setDate(date.getDate()+offset);setSelectedDate(localDateKey(date));}
+  function setSelectedDate(dateKey){if(!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)||dateKey===selectedDateKey)return;selectedDateKey=dateKey;calendarMonthDate=monthStart(dateFromKey(dateKey));updateDateHeader();renderCalendar();if(nativeHostAvailable)renderNativePage();else renderPrototypeDate();saveNotePreferences({selectedDate:selectedDateKey});}
+  document.getElementById('previous-day').addEventListener('click',()=>shiftSelectedDate(-1));
+  document.getElementById('next-day').addEventListener('click',()=>shiftSelectedDate(1));
+  document.getElementById('return-today').addEventListener('click',()=>setSelectedDate(localDateKey(new Date())));
+  function renderNativePage(){
+    updateDateHeader();
+    const items=nativeTodoItems.filter(item=>dayKey(item.dateMilliseconds)===selectedDateKey);
+    const active=document.getElementById('active-list');const completed=document.querySelector('#completed-list .task-list');active.replaceChildren();completed.replaceChildren();
+    const appendEmpty=(target,text)=>{const empty=document.createElement('div');empty.className='empty-hint';empty.textContent=text;target.append(empty);};
+    const makeRow=item=>{const row=document.createElement('label');row.className=`task${item.isDone?' done':''}`;row.dataset.recordId=item.id;row.dataset.bindingId=activeBindingId||'';const checkbox=document.createElement('input');checkbox.className='check';checkbox.type='checkbox';checkbox.checked=Boolean(item.isDone);checkbox.disabled=nativeSnapshotStale||nativeMutationInFlight.has(`${activeBindingId}|${item.id}`);checkbox.title=nativeSnapshotStale?'离线快照为只读，请刷新后再更改':'更改后会写回飞书多维表格';checkbox.addEventListener('change',()=>item.isDone?undoTask(checkbox):completeTask(checkbox));const title=document.createElement('span');title.className='task-text';title.textContent=item.title;row.append(checkbox,title);if(item.priority){const priority=document.createElement('span');priority.className=`priority${item.priority==='高'?' high':''}`;priority.textContent=item.priority;row.append(priority);}return row;};
+    const openItems=items.filter(item=>!item.isDone),doneItems=items.filter(item=>item.isDone);
+    if(openItems.length)openItems.forEach(item=>active.append(makeRow(item)));else appendEmpty(active,!nativeHasSnapshot?(nativeLoadError?'暂时无法读取视图，点击刷新重试':'正在读取飞书视图…'):(items.length?'这一天的待办都完成了':'当前日期暂无待办项，请检查飞书视图筛选'));
+    doneItems.forEach(item=>completed.append(makeRow(item)));document.getElementById('completed-list').hidden=false;document.getElementById('done-count').textContent=`${doneItems.length} 项`;
+    const state=document.getElementById('sync-state');state.textContent=nativeSnapshotStale?'连接失败，显示缓存':(nativeHasSnapshot?'已同步自飞书':'读取视图失败');state.title=nativeSnapshotStale?'当前显示最近一次成功读取的只读快照。刷新成功后恢复.':(nativeLoadError||'');
+    updateProgress();applyFontSpans();
+  }
+  function renderPrototypeDate(){const active=document.getElementById('active-list');const completed=document.querySelector('#completed-list .task-list');if(prototypeTaskMarkup===null)prototypeTaskMarkup={active:active.innerHTML,completed:completed.innerHTML};if(localDateKey(new Date())===selectedDateKey){active.innerHTML=prototypeTaskMarkup.active;completed.innerHTML=prototypeTaskMarkup.completed;updateProgress();applyFontSpans();return;}active.replaceChildren();const empty=document.createElement('div');empty.className='empty-hint';empty.textContent='当前日期暂无待办项，请检查飞书视图筛选';active.append(empty);completed.replaceChildren();document.getElementById('done-count').textContent='0 项';updateProgress();}
+  function applyNativeSnapshot(snapshot){if(!snapshot)return;nativeTodoItems=snapshot.items||[];nativeSnapshotStale=Boolean(snapshot.stale);nativeHasSnapshot=true;nativeLoadError='';renderNativePage();if(snapshot.error)toast(`刷新失败，继续显示上次数据：${snapshot.error}`);}
+  async function refreshActiveNote(){if(!nativeHostAvailable||!activeBindingId)return;nativeLoadError='';document.getElementById('sync-state').textContent='正在刷新…';try{const result=await nativeRequest('notes.refresh',{bindingId:activeBindingId,reason:'manual'});applyNativeSnapshot(result.snapshot);if(result.error)toast(`刷新失败，继续显示上次数据：${result.error}`);}catch(error){nativeLoadError=error.message;nativeSnapshotStale=nativeHasSnapshot;renderNativePage();toast(`无法刷新飞书数据：${error.message}`);}}
+  const moreButton=document.getElementById('more-button');
+  const moreMenu=document.getElementById('more-menu');
+  const personalizePanel=document.getElementById('personalize-panel');
+  moreButton.addEventListener('click',event=>{event.stopPropagation();moreMenu.classList.toggle('open');personalizePanel.classList.remove('open');updateDeleteAvailability();});
+  document.getElementById('personalize-button').addEventListener('click',event=>{event.stopPropagation();moreMenu.classList.remove('open');personalizePanel.classList.add('open');});
+  document.getElementById('personalize-close').addEventListener('click',()=>personalizePanel.classList.remove('open'));
+  document.addEventListener('pointerdown',event=>{if(!event.target.closest('.actions')){moreMenu.classList.remove('open');personalizePanel.classList.remove('open');}});
+  function togglePin(){moreMenu.classList.remove('open');const pinned=!note.classList.contains('pinned');if(nativeHostAvailable){nativeRequest('notes.setPinned',{pinned}).catch(error=>toast(error.message));return;}note.classList.toggle('pinned',pinned);document.getElementById('pin-label').textContent=pinned?'取消置顶':'置顶';}
+  document.getElementById('open-source-button').addEventListener('click',async()=>{moreMenu.classList.remove('open');if(nativeHostAvailable&&activeBindingId){try{await nativeRequest('notes.openSource',{bindingId:activeBindingId});}catch(error){toast(error.message);}return;}toast('将在飞书中打开对应视图');});
+  updateDateHeader();
+  if(nativeHostAvailable){nativeRequest('app.bootstrap').then(async result=>{pendingViewURL=result.pendingViewUrl||'';if(pendingViewURL)document.getElementById('view-url').value=pendingViewURL;if(result.authenticated){authState='connected';authDisplayName=result.displayName||'飞书用户';renderAuthState();await restoreNativeNotebook();}}).catch(error=>toast(error.message));}
+  function applyFontSpans(){
+    document.querySelectorAll('#active-list .task-text,#completed-list .task-text').forEach(el=>{
+      if(el.querySelector('span'))return;
+      const text=el.textContent; const parts=text.match(/[\u3400-\u9fff\u3000-\u303f\uff00-\uffef]+|[A-Za-z0-9]+|[^\u3400-\u9fff\u3000-\u303f\uff00-\uffefA-Za-z0-9]+/g)||[text];
+      el.textContent=''; parts.forEach(part=>{const span=document.createElement('span');span.textContent=part;span.className=/[\u3400-\u9fff\u3000-\u303f\uff00-\uffef]/.test(part)?'cn-text':(/[A-Za-z0-9]/.test(part)?'en-text':'');el.appendChild(span);});
+    });
+  }
+  applyFontSpans();
+  function applyNotePreferences(preferences={}){
+    if(!preferences)return;
+    const previousDateKey=selectedDateKey;
+    activeNotePreferences={opacity:100,fontCN:'PingFang SC',fontEN:'-apple-system',selectedDate:localDateKey(new Date()),...preferences};
+    if(/^\d{4}-\d{2}-\d{2}$/.test(activeNotePreferences.selectedDate))selectedDateKey=activeNotePreferences.selectedDate;
+    calendarMonthDate=monthStart(dateFromKey(selectedDateKey));renderCalendar();
+    updateDateHeader();
+    if(previousDateKey!==selectedDateKey&&nativeHostAvailable&&nativeHasSnapshot)renderNativePage();
+    const {opacity=100,fontCN='PingFang SC',fontEN='-apple-system',backgroundImageData}=activeNotePreferences;
+    note.style.setProperty('--font-cn',`"${fontCN}"`);note.style.setProperty('--font-en',`"${fontEN}"`);note.style.setProperty('--paper-opacity',Number(opacity)/100);
+    note.style.setProperty('--paper-image',backgroundImageData?`url("${backgroundImageData}")`:'none');
+    document.getElementById('font-cn').value=fontCN;document.getElementById('font-en').value=fontEN;document.getElementById('opacity-range').value=opacity;document.getElementById('opacity-value').textContent=`${opacity}%`;
+  }
+  async function saveNotePreferences(patch,bindingID=activeBindingId){
+    if(activeBindingId===bindingID){activeNotePreferences={...activeNotePreferences,...patch};applyNotePreferences(activeNotePreferences);}
+    if(!nativeHostAvailable||!bindingID)return;
+    try{const result=await nativeRequest('notes.setPreferences',{bindingId:bindingID,patch});if(activeBindingId===bindingID){activeNotePreferences=result.preferences;applyNotePreferences(result.preferences);}}
+    catch(error){notify(`设置未保存：${error.message}`);}
+  }
+  document.getElementById('font-cn').addEventListener('change',event=>saveNotePreferences({fontCN:event.target.value}));
+  document.getElementById('font-en').addEventListener('change',event=>saveNotePreferences({fontEN:event.target.value}));
+  document.getElementById('opacity-range').addEventListener('input',event=>{const value=Number(event.target.value);const bindingID=activeBindingId;applyNotePreferences({...activeNotePreferences,opacity:value});clearTimeout(opacitySaveTimer);opacitySaveTimer=setTimeout(()=>saveNotePreferences({opacity:value},bindingID),350);});
+  document.getElementById('background-upload').addEventListener('change',event=>{const file=event.target.files[0];if(!file)return;if(file.size>5*1024*1024){notify('背景图片不能超过 5 MB');event.target.value='';return;}if(!['image/png','image/jpeg','image/webp'].includes(file.type)){notify('请选择 PNG、JPEG 或 WebP 图片');event.target.value='';return;}const reader=new FileReader();reader.onload=()=>saveNotePreferences({backgroundImageData:reader.result});reader.readAsDataURL(file);});
+  document.getElementById('clear-background').addEventListener('click',()=>{document.getElementById('background-upload').value='';saveNotePreferences({removeBackground:true,backgroundImageData:null});activeNotePreferences.backgroundImageData=null;note.style.setProperty('--paper-image','none');});
+  function notify(message) { const el=document.getElementById('toast'); el.textContent=message; el.classList.add('show'); clearTimeout(timer); timer=setTimeout(()=>el.classList.remove('show'),1700); }
+  function refresh() { moreMenu.classList.remove('open');if(nativeHostAvailable){refreshActiveNote();return;}document.getElementById('sync-state').textContent='正在刷新…';setTimeout(()=>{document.getElementById('sync-state').textContent='刚刚同步';notify('已从飞书刷新视图');},500); }
+  async function setNativeCompletion(input,isDone){
+    const row=input.closest('.task');const recordId=row?.dataset.recordId;const previousState=!isDone;
+    if(!recordId||!activeBindingId){input.checked=previousState;notify('找不到当前便签或任务记录。');return;}
+    if(nativeSnapshotStale){input.checked=previousState;notify('当前是过期快照，请刷新后再更改。');return;}
+    const bindingId=activeBindingId;const mutationKey=`${bindingId}|${recordId}`;
+    if(nativeMutationInFlight.has(mutationKey)){input.checked=previousState;return;}
+    nativeMutationInFlight.add(mutationKey);input.disabled=true;
+    const mutationId=window.crypto?.randomUUID?window.crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    try{
+      const result=await nativeRequest('todos.setDone',{bindingId,recordId,done:isDone,mutationId});
+      if(activeBindingId===bindingId)applyNativeSnapshot({...result.snapshot,stale:Boolean(result.stale)});
+      if(result.warning)notify(result.warning);else notify(isDone?'已写回飞书':'已撤销并写回飞书');
+    }catch(error){
+      if(activeBindingId===bindingId){nativeSnapshotStale=true;input.checked=previousState;renderNativePage();notify(`写回失败：${error.message}`);await refreshActiveNote();}
+      else notify(`写回失败：${error.message}`);
+    }finally{
+      nativeMutationInFlight.delete(mutationKey);
+      document.querySelectorAll('.task[data-record-id]').forEach(taskRow=>{if(taskRow.dataset.recordId===recordId&&taskRow.dataset.bindingId===bindingId){const checkbox=taskRow.querySelector('.check');if(checkbox)checkbox.disabled=nativeSnapshotStale;}});
+    }
+  }
+  function completeTask(input) { if(nativeHostAvailable){setNativeCompletion(input,true);return;}if(!input.checked) return; const row=input.closest('.task'); input.disabled=true; setTimeout(()=>{ row.classList.add('done'); input.disabled=false; input.onchange=()=>undoTask(input); const target=document.querySelector('#completed-list .task-list'); target.appendChild(row); document.getElementById('completed-list').open=true; updateProgress(); notify('已写回飞书'); },260); }
+  function undoTask(input) { if(nativeHostAvailable){setNativeCompletion(input,false);return;}if(input.checked) return; const row=input.closest('.task'); input.disabled=true; setTimeout(()=>{ row.classList.remove('done'); input.disabled=false; input.onchange=()=>completeTask(input); document.getElementById('active-list').appendChild(row); updateProgress(); notify('已撤销并写回飞书'); },260); }
+  function updateProgress() { const done=document.querySelectorAll('.task.done').length; const total=document.querySelectorAll('.task').length; document.getElementById('progress-label').textContent=`${done} / ${total} 完成`; document.getElementById('progress-bar').style.width=`${total?done/total*100:0}%`; document.getElementById('done-count').textContent=`${done} 项`; }
+  function toast(message) { notify(message); }
+</script>
+</body>
+</html>
