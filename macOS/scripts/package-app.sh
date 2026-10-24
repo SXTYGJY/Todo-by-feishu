@@ -19,6 +19,7 @@ rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources"
 cp "$BUILD_ROOT/$CONFIGURATION/TodoDesktop" "$APP_BUNDLE/Contents/MacOS/TodoDesktop"
 cp -R "$BUILD_ROOT/$CONFIGURATION/TodoDesktop_TodoDesktop.bundle" "$APP_BUNDLE/Contents/Resources/"
+cp "$BUILD_ROOT/$CONFIGURATION/TodoDesktop_TodoDesktop.bundle/Resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/Todo.icns"
 
 cat > "$APP_BUNDLE/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -28,6 +29,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<'PLIST'
   <key>CFBundleExecutable</key><string>TodoDesktop</string>
   <key>CFBundleIdentifier</key><string>com.todo.desktop</string>
   <key>CFBundleName</key><string>Todo</string>
+  <key>CFBundleIconFile</key><string>Todo</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
   <key>CFBundleVersion</key><string>1</string>
