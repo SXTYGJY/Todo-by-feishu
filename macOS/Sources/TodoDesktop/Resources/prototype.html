@@ -109,7 +109,7 @@
   .more-menu,.personalize-panel { display:none; position:absolute; right:0; top:31px; z-index:30; padding:5px; border:1px solid #d9ded3; border-radius:8px; background:#fbfbf5; box-shadow:0 8px 22px #34382b25; transform:rotate(1.2deg); }
   .more-menu.open,.personalize-panel.open { display:block; }
   .more-menu { width:154px; }
-  .add-menu { display:none; position:absolute; right:34px; top:31px; z-index:31; width:132px; padding:5px; border:1px solid #d9ded3; border-radius:8px; background:#fbfbf5; box-shadow:0 8px 22px #34382b25; }
+  .add-menu { display:none; position:absolute; left:0; top:31px; z-index:31; width:132px; padding:5px; border:1px solid #d9ded3; border-radius:8px; background:#fbfbf5; box-shadow:0 8px 22px #34382b25; }
   .add-menu.open { display:block; }
   .menu-item { width:100%; display:flex; justify-content:space-between; align-items:center; border:0; border-radius:5px; padding:8px 9px; color:#45483f; background:transparent; text-align:left; font:inherit; font-size:12px; cursor:pointer; }
   .menu-item:hover { background:#eef0e4; }
@@ -263,7 +263,7 @@
   .completed .task { padding:8px 1px; }
   .foot { padding:10px 18px 14px; display:flex; justify-content:space-between; align-items:center; color:#76918a; font-size:10px; flex:0 0 auto; }
   .link { border:0; padding:0; color:#647b68; background:none; font:inherit; cursor:pointer; }
-  .toast { position:absolute; bottom:24px; right:25px; padding:9px 13px; border-radius:9px; color:#fff; background:#37342e; box-shadow:0 4px 18px #0003; opacity:0; transform:translateY(7px); transition:.2s; font-size:12px; }
+  .toast { position:absolute; bottom:24px; right:25px; padding:9px 13px; border-radius:9px; color:#fff; background:#37342e; box-shadow:0 4px 18px #0003; opacity:0; transform:translateY(7px); transition:.2s; font-size:12px; pointer-events:none; }
   .toast.show { opacity:1; transform:translateY(0); }
   @media(max-width:700px) { .note { left:16px; top:65px; width:min(310px,calc(100% - 32px)); } }
 
@@ -302,6 +302,7 @@
   .icon { width:28px; height:28px; border-radius:7px; transition:background-color .15s ease,color .15s ease; }
   .icon:hover { background:#f0e9ce; color:#45483f; }
   .add-note-icon { color:#637a64; font-size:21px; font-weight:400; }
+  .minimize-window-icon svg { display:block; width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.55; stroke-linecap:round; stroke-linejoin:round; }
   .date-switcher { margin-top:8px; }
   .date-switcher button { border-color:#e7e0cc; background:#fff9e8; color:#5a574d; }
   .date-switcher button:hover { background:#f5efd9; }
@@ -397,6 +398,14 @@
   .field-row select { width:100%; min-width:0; height:30px; padding:0 8px; border:1px solid #ded8c6; border-radius:6px; color:#403d34; background:#fffefa; font:11px -apple-system,sans-serif; }
   .field-row select:focus { border-color:#85947b; outline:none; box-shadow:0 0 0 2px #85947b22; }
   .field-note { color:#858174; font-size:10px; line-height:1.5; }
+  .field-map-head { display:flex; justify-content:space-between; align-items:center; color:#706d62; font-size:11px; font-weight:600; }
+  .field-map-item { display:flex; justify-content:space-between; gap:10px; padding:6px 0; border-bottom:1px solid #eee9dc; color:#706d62; font-size:11px; }
+  .field-map-value { color:#454239; text-align:right; }
+  .field-map-adjust { padding:0; border:0; color:#657A68; background:none; font:inherit; cursor:pointer; }
+  .field-map-error { color:#a65d48; font-size:10px; line-height:1.45; }
+  .field-map-unresolved { display:grid; gap:8px; }
+  .field-map-manual { display:grid; gap:8px; margin-top:8px; padding-top:8px; border-top:1px solid #e8e3d6; }
+  .field-map-manual[hidden] { display:none; }
   .empty-hint { padding:12px 2px; color:#8c887b; font-size:11px; text-align:center; }
   .notebook-entry { border-color:#e9e3d3; border-radius:7px; background:#fffefa; }
   .notebook-entry strong { color:#454239; }
@@ -465,6 +474,7 @@
               <button class="menu-item" id="new-task-button" type="button" role="menuitem" disabled>新建条目</button>
               <button class="menu-item" id="new-note-button" type="button" role="menuitem">新建便签</button>
             </div>
+            <button class="icon minimize-window-icon" id="minimize-window-button" type="button" title="最小化" aria-label="最小化窗口" onclick="minimizeTodoWindow()"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 11.5h10"/></svg></button>
             <button class="icon" id="more-button" title="更多" aria-label="更多"><span class="ellipsis-mark" aria-hidden="true"><i></i><i></i><i></i></span></button>
             <div class="more-menu" id="more-menu">
               <div class="menu-group-wrap" id="menu-window-group">
@@ -472,7 +482,6 @@
                 <div class="menu-submenu">
                   <button class="menu-item" onclick="togglePin()"><span id="pin-label">置顶</span></button>
                   <button class="menu-item" onclick="refresh()">刷新</button>
-                  <button class="menu-item" onclick="hideTodoWindow()">隐藏</button>
                 </div>
               </div>
               <div class="menu-group-wrap" id="menu-notes-group">
@@ -632,6 +641,7 @@
   const pendingNativeRequests=new Map();
   let pendingViewURL='';
   let bindingInspection=null;
+  let bindingFieldMappingDraft=null;
   let nativeTodoItems=[];
   let nativeProjectionIssues=[];
   let nativeSnapshotStale=false;
@@ -780,38 +790,66 @@
   }
   function updateDeleteAvailability(){const button=document.getElementById('delete-note-button');if(button)button.disabled=!activeBindingId;refreshCreateAvailability();}
   function replaceNotebookItems(items,activeID){localNotebook.splice(0,localNotebook.length,...(items||[]));if(activeBindingId!== (activeID||null)){taskOptionsCache=null;taskOptionsRequest=null;plannedDurationAvailable=false;cancelInlineTaskEdit(false);}activeBindingId=activeID||null;updateDeleteAvailability();}
-  function resetFieldMapping(){bindingInspection=null;const panel=document.getElementById('field-mapping');panel.innerHTML='';panel.classList.remove('open');document.getElementById('bind-submit').textContent='读取视图字段';}
+  function resetFieldMapping(){bindingInspection=null;bindingFieldMappingDraft=null;const panel=document.getElementById('field-mapping');panel.innerHTML='';panel.classList.remove('open');document.getElementById('bind-submit').textContent='读取视图字段';document.getElementById('bind-submit').disabled=false;}
   function showBindDialog(){if(authState!=='connected'){startFeishuAuthorization();return;}document.getElementById('add-menu').classList.remove('open');document.getElementById('add-note').setAttribute('aria-expanded','false');document.getElementById('more-menu').classList.remove('open');document.getElementById('bind-error').textContent='';resetFieldMapping();document.getElementById('view-url').value=nativeHostAvailable?pendingViewURL:'';document.getElementById('bind-dialog').classList.add('open');setTimeout(()=>document.getElementById('view-url').focus(),30);}
-  function renderFieldMapping(inspection){
+  function normalizeFieldName(value){return String(value||'').normalize('NFKC').trim().toLocaleLowerCase();}
+  const bindingFieldRoles=[
+    {key:'taskFieldID',label:'任务内容',fieldName:'任务内容',type:1,placeholder:'选择文本字段'},
+    {key:'dateFieldID',label:'日期',fieldName:'所属日期',type:5,placeholder:'选择日期字段'},
+    {key:'priorityFieldID',label:'优先级',fieldName:'优先级',type:3,placeholder:'选择单选字段'},
+    {key:'doneFieldID',label:'完成情况',fieldName:'状态',type:3,placeholder:'选择状态字段',isStatus:true}
+  ];
+  function isCompatibleStatusField(field){const options=field?.options||[];return field?.type===3&&options.length===2&&options.some(option=>option.name==='已完成')&&options.some(option=>option.name==='未完成');}
+  function matchedBindingField(role,fields){const candidates=fields.filter(field=>field.type===role.type&&(!role.isStatus||isCompatibleStatusField(field))&&normalizeFieldName(field.name)===normalizeFieldName(role.fieldName));return candidates.length===1?candidates[0]:null;}
+  function getBindingFieldMapping(){
+    const fields=bindingInspection?.fields||[];const mapping={...(bindingFieldMappingDraft||{})};
+    const doneField=fields.find(field=>field.id===mapping.doneFieldID);const options=doneField?.options||[];
+    mapping.doneOptionID=options.find(option=>option.name==='已完成')?.id||'';mapping.undoneOptionID=options.find(option=>option.name==='未完成')?.id||'';
+    return mapping;
+  }
+  function isBindingFieldMappingComplete(){
+    const mapping=getBindingFieldMapping();const ids=bindingFieldRoles.map(role=>mapping[role.key]);
+    return ids.every(Boolean)&&new Set(ids).size===ids.length&&Boolean(mapping.doneOptionID)&&Boolean(mapping.undoneOptionID);
+  }
+  function renderFieldMapping(inspection,manualMode=false){
     bindingInspection=inspection;
-    const panel=document.getElementById('field-mapping');panel.innerHTML='';panel.classList.add('open');
     const fields=inspection.fields||[];
-    const addSelect=(id,label,choices,placeholder)=>{
-      const row=document.createElement('label');row.className='field-row';const caption=document.createElement('span');caption.textContent=label;
-      const select=document.createElement('select');select.id=id;select.required=true;
-      const empty=document.createElement('option');empty.value='';empty.textContent=placeholder;select.append(empty);
+    if(!bindingFieldMappingDraft){
+      bindingFieldMappingDraft={};const used=new Set();
+      bindingFieldRoles.forEach(role=>{const match=matchedBindingField(role,fields);if(match&&!used.has(match.id)){bindingFieldMappingDraft[role.key]=match.id;used.add(match.id);}});
+    }
+    const panel=document.getElementById('field-mapping');panel.innerHTML='';panel.classList.add('open');
+    const head=document.createElement('div');head.className='field-map-head';
+    const title=document.createElement('span');title.textContent=`${inspection.viewName||'多维表格视图'}`;
+    const adjust=document.createElement('button');adjust.type='button';adjust.className='field-map-adjust';adjust.textContent=manualMode?'收起调整':'手动调整';
+    adjust.addEventListener('click',()=>renderFieldMapping(inspection,!manualMode));head.append(title,adjust);panel.append(head);
+    const unresolved=document.createElement('div');unresolved.className='field-map-unresolved';panel.append(unresolved);
+    const manual=document.createElement('div');manual.className='field-map-manual';manual.hidden=!manualMode;panel.append(manual);
+    const roleFieldValue=(role)=>fields.find(field=>field.id===bindingFieldMappingDraft[role.key]);
+    const addSelect=(container,role)=>{
+      const row=document.createElement('label');row.className='field-row';const caption=document.createElement('span');caption.textContent=role.label;
+      const select=document.createElement('select');select.required=true;
+      const empty=document.createElement('option');empty.value='';empty.textContent=role.placeholder;select.append(empty);
+      const choices=fields.filter(field=>field.type===role.type&&(!role.isStatus||isCompatibleStatusField(field)));
       choices.forEach(field=>{const option=document.createElement('option');option.value=field.id;option.textContent=field.name;select.append(option);});
-      row.append(caption,select);panel.append(row);return select;
+      select.value=bindingFieldMappingDraft[role.key]||'';
+      select.addEventListener('change',()=>{
+        const duplicate=select.value&&bindingFieldRoles.some(other=>other.key!==role.key&&bindingFieldMappingDraft[other.key]===select.value);
+        if(duplicate){document.getElementById('bind-error').textContent='同一字段不能用于多个用途。';return;}
+        bindingFieldMappingDraft[role.key]=select.value;document.getElementById('bind-error').textContent='';renderFieldMapping(inspection,manualMode);
+      });
+      row.append(caption,select);container.append(row);
+      if(!choices.length){const error=document.createElement('div');error.className='field-map-error';error.textContent=`未找到可用于“${role.label}”的兼容字段。`;container.append(error);}
     };
-    const textFields=fields.filter(field=>field.type===1),dateFields=fields.filter(field=>field.type===5),singleFields=fields.filter(field=>field.type===3);
-    addSelect('map-task-field','任务内容',textFields,'选择文本字段');
-    addSelect('map-date-field','所属日期',dateFields,'选择日期字段');
-    addSelect('map-priority-field','优先级',singleFields,'选择单选字段');
-    const doneSelect=addSelect('map-done-field','完成状态',singleFields,'选择单选字段');
-    const optionRow=document.createElement('div');optionRow.className='field-row';const optionCaption=document.createElement('span');optionCaption.textContent='状态选项';
-    const optionWrap=document.createElement('div');optionWrap.style.display='grid';optionWrap.style.gridTemplateColumns='1fr 1fr';optionWrap.style.gap='6px';
-    const doneOption=document.createElement('select');doneOption.id='map-done-option';doneOption.required=true;const undoneOption=document.createElement('select');undoneOption.id='map-undone-option';undoneOption.required=true;
-    optionWrap.append(doneOption,undoneOption);optionRow.append(optionCaption,optionWrap);panel.append(optionRow);
-    const updateOptions=()=>{
-      doneOption.innerHTML='';undoneOption.innerHTML='';
-      const field=fields.find(item=>item.id===doneSelect.value);const options=field?.options||[];
-      [[doneOption,'已完成'],[undoneOption,'未完成']].forEach(([select,name])=>{const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=`选择${name}`;select.append(placeholder);options.filter(item=>item.name===name).forEach(item=>{const option=document.createElement('option');option.value=item.id;option.textContent=item.name;select.append(option);});});
-      if(options.some(item=>item.name==='已完成'))doneOption.value=options.find(item=>item.name==='已完成').id;
-      if(options.some(item=>item.name==='未完成'))undoneOption.value=options.find(item=>item.name==='未完成').id;
-    };
-    doneSelect.addEventListener('change',updateOptions);updateOptions();
-    const hint=document.createElement('div');hint.className='field-note';hint.textContent=`已读取视图“${inspection.viewName||'多维表格视图'}”的字段。请明确选择字段；任务顺序沿用飞书视图。`;panel.append(hint);
-    document.getElementById('bind-submit').textContent='建立便签';
+    bindingFieldRoles.forEach(role=>{
+      const value=roleFieldValue(role);const needsChoice=!bindingFieldMappingDraft[role.key]||!value;
+      if(manualMode){addSelect(manual,role);return;}
+      if(needsChoice){addSelect(unresolved,role);return;}
+      const row=document.createElement('div');row.className='field-map-item';const label=document.createElement('span');label.textContent=role.label;const fieldName=document.createElement('span');fieldName.className='field-map-value';fieldName.textContent=value.name;row.append(label,fieldName);unresolved.append(row);
+    });
+    if(!unresolved.childElementCount&&!manualMode){const hint=document.createElement('div');hint.className='field-note';hint.textContent='已自动识别必需字段。';unresolved.append(hint);}
+    const hint=document.createElement('div');hint.className='field-note';hint.textContent='任务顺序沿用飞书视图。计划时长字段会在兼容时自动识别。';panel.append(hint);
+    document.getElementById('bind-submit').textContent='建立便签';document.getElementById('bind-submit').disabled=!isBindingFieldMappingComplete();
   }
   function renderNotebook(entries=localNotebook){
     const list=document.getElementById('notebook-list');list.innerHTML='';
@@ -1079,13 +1117,13 @@
   async function openNotebook(){document.getElementById('more-menu').classList.remove('open');if(nativeHostAvailable){try{const result=await nativeRequest('notebook.list');replaceNotebookItems(result.items||[],result.activeBindingId);renderNotebook();}catch(error){toast(error.message);return;}}else renderNotebook();document.getElementById('notebook-dialog').classList.add('open');}
   document.getElementById('open-notebook').addEventListener('click',openNotebook);
   document.getElementById('closed-open-notebook').addEventListener('click',openNotebook);
-  async function hideTodoWindow(){
+  async function minimizeTodoWindow(){
     document.getElementById('more-menu').classList.remove('open');
-    if(!nativeHostAvailable){notify('原型预览：隐藏窗口会保留 Todo 在后台运行');return;}
-    try{await nativeRequest('app.hide');}
-    catch(error){notify(`隐藏失败：${error.message}`);}
+    if(!nativeHostAvailable){notify('原型预览：此按钮会最小化 Todo 窗口');return;}
+    try{await nativeRequest('app.minimize');}
+    catch(error){notify(`最小化失败：${error.message}`);}
   }
-  window.hideTodoWindow=hideTodoWindow;
+  window.minimizeTodoWindow=minimizeTodoWindow;
   document.getElementById('configure-feishu-credentials').addEventListener('click',async()=>{
     moreMenu.classList.remove('open');
     if(!nativeHostAvailable){toast('请在 Todo 菜单栏中配置飞书应用凭证');return;}
@@ -1116,13 +1154,13 @@
           document.getElementById('bind-submit').disabled=true;document.getElementById('bind-submit').textContent='正在读取…';
           bindingInspection=await nativeRequest('notes.inspectBinding',{viewUrl:url});renderFieldMapping(bindingInspection);return;
         }
-        const fieldMapping={taskFieldID:document.getElementById('map-task-field').value,dateFieldID:document.getElementById('map-date-field').value,priorityFieldID:document.getElementById('map-priority-field').value,doneFieldID:document.getElementById('map-done-field').value,doneOptionID:document.getElementById('map-done-option').value,undoneOptionID:document.getElementById('map-undone-option').value};
+        const fieldMapping=getBindingFieldMapping();
         if(Object.values(fieldMapping).some(value=>!value)){errorLabel.textContent='请完成所有字段选择。';return;}
         document.getElementById('bind-submit').disabled=true;document.getElementById('bind-submit').textContent='正在绑定…';
         const result=await nativeRequest('notes.createBinding',{viewUrl:url,inspectionID:bindingInspection.inspectionID,fieldMapping});pendingViewURL='';
         const chosenDate=selectedDateKey;const entry={...result.binding,open:true,isActive:true,snapshot:result.snapshot};localNotebook.push(entry);activeBindingId=entry.id;applyNativeSnapshot(result.snapshot);document.getElementById('bind-dialog').classList.remove('open');showBoundNote();applyNotePreferences({...result.preferences,selectedDate:chosenDate});await saveNotePreferences({selectedDate:chosenDate},entry.id);updateDeleteAvailability();toast('已读取飞书视图并建立便签');
       }catch(error){errorLabel.textContent=error.message;if(error.code==='INSPECTION_EXPIRED')resetFieldMapping();}
-      finally{document.getElementById('bind-submit').disabled=false;document.getElementById('bind-submit').textContent=bindingInspection?'建立便签':'读取视图字段';}
+      finally{document.getElementById('bind-submit').disabled=bindingInspection?!isBindingFieldMappingComplete():false;document.getElementById('bind-submit').textContent=bindingInspection?'建立便签':'读取视图字段';}
       return;
     }
     let parsed;try{parsed=new URL(url);}catch{errorLabel.textContent='请粘贴有效的飞书多维表格视图链接。';return;}const viewId=parsed.searchParams.get('view')||parsed.searchParams.get('view_id');const tableId=parsed.searchParams.get('table')||parsed.searchParams.get('table_id');if(!/\.feishu\.cn$/i.test(parsed.hostname)||!/(\/base\/|\/wiki\/)/.test(parsed.pathname)||!viewId||!tableId){errorLabel.textContent='链接需包含飞书 Base、table 和 view 信息。';return;}if(localNotebook.some(entry=>entry.viewId===viewId)){errorLabel.textContent='这个视图已在便签夹中。';return;}const id=`note-${Date.now()}`;localNotebook.push({id,viewId,url,name:`${formatDate(dateFromKey(selectedDateKey))} 待办`,open:true});activeBindingId=id;document.getElementById('bind-dialog').classList.remove('open');showBoundNote();updateDeleteAvailability();toast(localNotebook.length===1?'已添加便签（原型任务为示例数据）':'已添加第二张便签（原型交互预览）');
@@ -1173,6 +1211,28 @@
   });
   dragHandle.addEventListener('pointermove',event=>{ if(!dragging)return; note.style.left=`${baseLeft+event.clientX-startX}px`; note.style.top=`${baseTop+event.clientY-startY}px`; });
   dragHandle.addEventListener('pointerup',()=>dragging=false);
+  let lastDragRegionMetrics='';
+  function reportNativeDragRegion(){
+    if(!nativeHostAvailable)return;
+    const headerRect=dragHandle.getBoundingClientRect();
+    const interactiveRects=[...dragHandle.querySelectorAll('button,input,select,textarea,a,[role="button"],summary')]
+      .map(element=>{const rect=element.getBoundingClientRect();return{x:rect.left-headerRect.left,y:rect.top-headerRect.top,width:rect.width,height:rect.height};})
+      .filter(rect=>rect.width>0&&rect.height>0);
+    const metrics={height:headerRect.height,interactiveRects};
+    const serialized=JSON.stringify(metrics);
+    if(serialized===lastDragRegionMetrics)return;
+    lastDragRegionMetrics=serialized;
+    window.webkit.messageHandlers.todoHost.postMessage({action:'updateDragRegion',...metrics});
+  }
+  if(nativeHostAvailable){
+    const dragRegionResizeObserver=new ResizeObserver(reportNativeDragRegion);
+    dragRegionResizeObserver.observe(dragHandle);
+    const dragRegionMutationObserver=new MutationObserver(reportNativeDragRegion);
+    dragRegionMutationObserver.observe(dragHandle,{attributes:true,childList:true,subtree:true});
+    dragRegionMutationObserver.observe(note,{attributes:true,attributeFilter:['class','style']});
+    window.addEventListener('resize',reportNativeDragRegion);
+    requestAnimationFrame(reportNativeDragRegion);
+  }
   // 四边和四角分别调整窗口位置及尺寸，宽高都不会低于便签最小尺寸。
   document.querySelectorAll('.resize-handle').forEach(handle=>{
     handle.addEventListener('pointerdown',event=>{
@@ -1424,6 +1484,14 @@
   const fixedTaskPanel=document.getElementById('fixed-task-panel');
   let editingFixedTaskID=null;
   const failedFixedOccurrenceDates=new Map();
+  let dragRegionPassthroughEnabled=false;
+  const dragRegionPassthroughObserver=new MutationObserver(()=>{
+    const enabled=Boolean(document.querySelector('.add-menu.open,.more-menu.open,.personalize-panel.open,.fixed-task-panel.open,.dialog-backdrop.open'));
+    if(enabled===dragRegionPassthroughEnabled)return;
+    dragRegionPassthroughEnabled=enabled;
+    if(nativeHostAvailable)window.webkit.messageHandlers.todoHost.postMessage({action:'setDragRegionPassthrough',enabled});
+  });
+  dragRegionPassthroughObserver.observe(document.documentElement,{attributes:true,attributeFilter:['class'],subtree:true});
   function resetMenuSubmenus(){moreMenu.querySelectorAll('.menu-submenu.open').forEach(panel=>panel.classList.remove('open'));moreMenu.querySelectorAll('.menu-group[aria-expanded="true"]').forEach(button=>button.setAttribute('aria-expanded','false'));}
   moreButton.addEventListener('click',event=>{event.stopPropagation();closeAddMenu();if(moreMenu.classList.contains('open')){resetMenuSubmenus();moreMenu.classList.remove('open');}else{resetMenuSubmenus();moreMenu.classList.add('open');}personalizePanel.classList.remove('open');fixedTaskPanel.classList.remove('open');updateDeleteAvailability();});
   moreMenu.addEventListener('click',event=>{

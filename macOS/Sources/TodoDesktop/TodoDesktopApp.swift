@@ -47,6 +47,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if let iconURL = Bundle.module.url(forResource: "AppIcon",
+                                            withExtension: "png",
+                                            subdirectory: "Resources"),
+           let icon = NSImage(contentsOf: iconURL) {
+            NSApp.applicationIconImage = icon
+        }
         NSApp.setActivationPolicy(.regular)
         buildApplicationMenu()
         buildDockMenu()
@@ -342,6 +348,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         bridgeHandler.onTaskContextMenu = { [weak self] bindingID, recordID, canMutate in
             self?.showTaskContextMenu(bindingID: bindingID, recordID: recordID, canMutate: canMutate)
         }
+        bridgeHandler.onSetDragRegionPassthrough = { [weak self] enabled in
+            self?.dragRegion.passesThroughMouseEvents = enabled
+        }
+        bridgeHandler.onUpdateDragRegion = { [weak self] height, interactiveRects in
+            self?.updateDragRegion(height: height, interactiveRects: interactiveRects)
+        }
         bridgeHandler.onRequest = { [weak self] request in
             self?.handleBridgeRequest(request) ?? .failure(request.requestID,
                                                             code: "HOST_UNAVAILABLE",
@@ -369,11 +381,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         webView.frame = window.contentView?.bounds ?? NSRect(origin: .zero, size: frame.size)
         webView.autoresizingMask = [.width, .height]
         let headerHeight = min(68, webView.bounds.height)
+        let headerOriginY = webView.isFlipped ? 0 : webView.bounds.height - headerHeight
         dragRegion = WindowDragRegion(frame: NSRect(x: 0,
-                                                     y: webView.bounds.height - headerHeight,
+                                                     y: headerOriginY,
                                                      width: webView.bounds.width,
                                                      height: headerHeight))
-        dragRegion.autoresizingMask = [.width, .minYMargin]
+        dragRegion.autoresizingMask = webView.isFlipped ? [.width, .maxYMargin] : [.width, .minYMargin]
         dragRegion.contextMenuProvider = { [weak self] _ in self?.webView.closePageContextMenu() }
         webView.addSubview(dragRegion)
 
@@ -381,6 +394,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             webView.loadFileURL(pageURL, allowingReadAccessTo: pageURL.deletingLastPathComponent())
         } else {
             loadResourceError()
+        }
+    }
+
+    private func updateDragRegion(height: CGFloat, interactiveRects: [CGRect]) {
+        guard let webView, let dragRegion else { return }
+        let safeHeight = min(max(height, 0), webView.bounds.height)
+        let originY = webView.isFlipped ? 0 : webView.bounds.height - safeHeight
+        dragRegion.frame = NSRect(x: 0, y: originY, width: webView.bounds.width, height: safeHeight)
+        dragRegion.autoresizingMask = webView.isFlipped ? [.width, .maxYMargin] : [.width, .minYMargin]
+        dragRegion.interactiveRects = interactiveRects.filter { rect in
+            rect.minX >= 0 && rect.minY >= 0 && rect.maxX <= webView.bounds.width && rect.maxY <= safeHeight
         }
     }
 
@@ -488,6 +512,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         case "app.hide":
             hideWindow()
             return .success(request.requestID, result: ["hidden": true])
+
+        case "app.minimize":
+            window.miniaturize(nil)
+            return .success(request.requestID, result: ["minimized": true])
 
         case "notes.setPinned":
             guard let pinned = request.params["pinned"] as? Bool else {
@@ -1490,6 +1518,10 @@ private final class TodoNoteWebView: WKWebView {
 
 private final class WindowDragRegion: NSView {
     var contextMenuProvider: ((NSEvent) -> NSMenu?)?
+    var passesThroughMouseEvents = false
+    var interactiveRects: [CGRect] = []
+
+    override var isFlipped: Bool { true }
 
     override var mouseDownCanMoveWindow: Bool { false }
 
@@ -1502,8 +1534,13 @@ private final class WindowDragRegion: NSView {
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
+        guard !passesThroughMouseEvents else { return nil }
+        guard let superview else { return nil }
+        let localPoint = convert(point, from: superview)
         let actionsAreaWidth = min(74, bounds.width * 0.28)
-        guard bounds.contains(point), point.x < bounds.maxX - actionsAreaWidth else {
+        guard bounds.contains(localPoint),
+              localPoint.x < bounds.maxX - actionsAreaWidth,
+              !interactiveRects.contains(where: { $0.contains(localPoint) }) else {
             return nil
         }
         return self
