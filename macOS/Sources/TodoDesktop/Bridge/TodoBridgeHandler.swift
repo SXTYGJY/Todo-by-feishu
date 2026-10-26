@@ -7,31 +7,8 @@ final class TodoBridgeHandler: NSObject, WKScriptMessageHandler {
     var onAsyncRequest: ((BridgeRequest, @escaping (BridgeResponse) -> Void) -> Void)?
     var onTogglePinned: (() -> Void)?
     var onTaskContextMenu: ((String?, String?, Bool) -> Void)?
-    var onSetDragRegionPassthrough: ((Bool) -> Void)?
-    var onUpdateDragRegion: ((CGFloat, [CGRect]) -> Void)?
 
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        if let body = message.body as? [String: Any], body["action"] as? String == "updateDragRegion" {
-            let height = (body["height"] as? NSNumber)?.doubleValue ?? 0
-            let interactiveRects = (body["interactiveRects"] as? [[String: Any]] ?? []).compactMap { value -> CGRect? in
-                guard let x = (value["x"] as? NSNumber)?.doubleValue,
-                      let y = (value["y"] as? NSNumber)?.doubleValue,
-                      let width = (value["width"] as? NSNumber)?.doubleValue,
-                      let height = (value["height"] as? NSNumber)?.doubleValue,
-                      x.isFinite, y.isFinite, width.isFinite, height.isFinite,
-                      width > 0, height > 0 else { return nil }
-                return CGRect(x: x, y: y, width: width, height: height)
-            }
-            DispatchQueue.main.async { [weak self] in
-                self?.onUpdateDragRegion?(CGFloat(height), interactiveRects)
-            }
-            return
-        }
-        if let body = message.body as? [String: Any], body["action"] as? String == "setDragRegionPassthrough" {
-            let enabled = body["enabled"] as? Bool ?? false
-            DispatchQueue.main.async { [weak self] in self?.onSetDragRegionPassthrough?(enabled) }
-            return
-        }
         if let body = message.body as? [String: Any], body["action"] as? String == "togglePinned" {
             DispatchQueue.main.async { [weak self] in self?.onTogglePinned?() }
             return

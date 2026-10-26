@@ -12,7 +12,6 @@
   .note.is-empty .title { display:none; }
   .note.is-empty .network-indicator { display:none; }
   .note.is-empty .title-row { justify-content:flex-end; }
-  .note.is-empty .drag { display:none; }
   .note.is-empty .note-head { padding:10px 12px 0; border-bottom:0; }
   .note.is-empty .progress,.note.is-empty .projection-warning,.note.is-empty #active-list,.note.is-empty .completed,.note.is-empty .foot { display:none; }
   .note-empty { flex:1; display:flex; align-items:center; justify-content:center; padding:20px 26px 34px; text-align:center; color:#77786e; }
@@ -69,22 +68,9 @@
   .note { position:absolute; left:112px; top:118px; width:310px; height:390px; min-width:270px; min-height:260px; display:flex; flex-direction:column; border-radius:11px; background:transparent; box-shadow:0 7px 17px #34382b24,0 1px 2px #34382b18; overflow:visible; transform:rotate(-1.2deg); transform-origin:center; isolation:isolate; --paper-opacity:1; --paper-image:none; --font-cn:"PingFang SC"; --font-en:-apple-system; --task-text-color:#454239; --task-font-weight:400; --task-font-style:normal; }
   .note.pinned { box-shadow:0 10px 24px #34382b38,0 1px 2px #34382b18; }
   .note-secondary { pointer-events:none; box-shadow:0 6px 15px #34382b20,0 1px 2px #34382b16; }
-  .note-secondary .resize-handle,.note-secondary .progress { display:none!important; }
+  .note-secondary .progress { display:none!important; }
   .note:before { content:""; position:absolute; z-index:-1; inset:0; border-radius:inherit; background-color:var(--paper); background-image:var(--paper-image); background-position:center; background-size:cover; opacity:var(--paper-opacity); pointer-events:none; }
-  /* 八个透明热区让四边和四角都可以拖拽缩放；静止时不影响便签外观。 */
-  .resize-handle { position:absolute; z-index:10; touch-action:none; }
-  .resize-handle.n,.resize-handle.s { left:10px; right:10px; height:7px; cursor:ns-resize; }
-  .resize-handle.n { top:-3px; } .resize-handle.s { bottom:-3px; }
-  .resize-handle.e,.resize-handle.w { top:10px; bottom:10px; width:7px; cursor:ew-resize; }
-  .resize-handle.e { right:-3px; } .resize-handle.w { left:-3px; }
-  .resize-handle.ne,.resize-handle.nw,.resize-handle.se,.resize-handle.sw { width:13px; height:13px; }
-  .resize-handle.ne { top:-4px; right:-4px; cursor:nesw-resize; }
-  .resize-handle.nw { top:-4px; left:-4px; cursor:nwse-resize; }
-  .resize-handle.se { bottom:-4px; right:-4px; cursor:nwse-resize; }
-  .resize-handle.sw { bottom:-4px; left:-4px; cursor:nesw-resize; }
   .note-head { flex:0 0 auto; padding:15px 17px 12px; background:transparent; border-bottom:1px solid #d9ded3; }
-  .drag { display:flex; justify-content:center; margin:-5px 0 11px; }
-  .drag i { width:28px; height:3px; border-radius:3px; background:#c3c9bd; }
   .title-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
   .title-meta { display:flex; align-items:center; gap:8px; min-width:0; }
   .title { font-size:16px; font-weight:650; letter-spacing:.1px; }
@@ -295,14 +281,11 @@
   }
   .note.pinned { box-shadow:0 11px 26px #53492b27, 0 2px 5px #53492b0d; }
   .note-head { padding:15px 16px 13px; border-bottom:1px solid #e9e2cb; }
-  .drag { margin:-5px 0 10px; }
-  .drag i { width:26px; height:3px; background:#d6cfb8; }
   .title { color:#3f3b31; font-size:15px; font-weight:650; letter-spacing:0; }
   .actions { gap:4px; color:#77715f; }
   .icon { width:28px; height:28px; border-radius:7px; transition:background-color .15s ease,color .15s ease; }
   .icon:hover { background:#f0e9ce; color:#45483f; }
   .add-note-icon { color:#637a64; font-size:21px; font-weight:400; }
-  .minimize-window-icon svg { display:block; width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.55; stroke-linecap:round; stroke-linejoin:round; }
   .date-switcher { margin-top:8px; }
   .date-switcher button { border-color:#e7e0cc; background:#fff9e8; color:#5a574d; }
   .date-switcher button:hover { background:#f5efd9; }
@@ -414,7 +397,6 @@
   .note-empty-content { max-width:230px; color:#5c5a50; font-size:13px; line-height:1.65; }
   .note-empty-hint,.empty-hint { color:#7f7b6f; }
   .toast { border-radius:7px; background:#37362f; box-shadow:0 5px 16px #24211830; }
-  .resize-handle.n,.resize-handle.s { cursor:ns-resize; }
   @media(max-width:700px) {
     .desktop { border-radius:0; box-shadow:none; }
     .note { border-radius:14px; }
@@ -464,8 +446,7 @@
 <body>
   <main class="desktop" aria-label="桌面浮窗原型">
     <section class="note is-empty is-calendar" id="note">
-      <header class="note-head" id="drag-handle">
-        <div class="drag"><i></i></div>
+      <header class="note-head">
         <div class="title-row">
           <div class="title-meta"><div class="title" id="note-title">今日待办</div><span class="network-indicator" id="network-indicator" role="img" aria-label="网络正常" title="已连接，网络正常"></span></div>
           <div class="actions" aria-label="便签操作">
@@ -474,7 +455,6 @@
               <button class="menu-item" id="new-task-button" type="button" role="menuitem" disabled>新建条目</button>
               <button class="menu-item" id="new-note-button" type="button" role="menuitem">新建便签</button>
             </div>
-            <button class="icon minimize-window-icon" id="minimize-window-button" type="button" title="最小化" aria-label="最小化窗口" onclick="minimizeTodoWindow()"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 11.5h10"/></svg></button>
             <button class="icon" id="more-button" title="更多" aria-label="更多"><span class="ellipsis-mark" aria-hidden="true"><i></i><i></i><i></i></span></button>
             <div class="more-menu" id="more-menu">
               <div class="menu-group-wrap" id="menu-window-group">
@@ -620,14 +600,6 @@
           <button id="focus-save-settings" type="button">保存设置</button>
         </div>
       </section>
-      <span class="resize-handle n" data-edge="n" aria-hidden="true"></span>
-      <span class="resize-handle e" data-edge="e" aria-hidden="true"></span>
-      <span class="resize-handle s" data-edge="s" aria-hidden="true"></span>
-      <span class="resize-handle w" data-edge="w" aria-hidden="true"></span>
-      <span class="resize-handle ne" data-edge="ne" aria-hidden="true"></span>
-      <span class="resize-handle nw" data-edge="nw" aria-hidden="true"></span>
-      <span class="resize-handle se" data-edge="se" aria-hidden="true"></span>
-      <span class="resize-handle sw" data-edge="sw" aria-hidden="true"></span>
     </section>
     <div class="dialog-backdrop" id="bind-dialog"><form class="dialog" id="bind-form"><h2>绑定一个视图</h2><input id="view-url" type="url" placeholder="https://xxx.feishu.cn/base/...?table=...&view=..." autocomplete="url"><div class="field-mapping" id="field-mapping"></div><div class="dialog-error" id="bind-error"></div><div class="dialog-actions"><button type="button" class="dialog-button" id="bind-cancel">取消</button><button type="submit" class="dialog-button primary" id="bind-submit">读取视图字段</button></div></form></div>
     <div class="dialog-backdrop" id="task-dialog"><form class="dialog task-create-dialog" id="task-form"><h2 id="task-dialog-title">新建条目</h2><label class="task-create-field" for="task-title-input">待办内容<input id="task-title-input" type="text" maxlength="500" placeholder="输入待办内容" required></label><label class="task-create-field" for="task-priority-select">优先级<select id="task-priority-select" required><option value="">选择优先级</option></select></label><label class="task-create-field" id="task-planned-duration-field" for="task-planned-duration" hidden>计划时长（小时，可选）<input id="task-planned-duration" type="number" min="0.5" step="0.5" placeholder="例如 1.5"></label><div class="task-create-field" id="task-date-field"><span>所属日期</span><div class="task-create-date" id="task-create-date"></div></div><div class="task-create-error" id="task-create-error" role="status"></div><div class="dialog-actions"><button type="button" class="dialog-button" id="task-cancel">取消</button><button type="submit" class="dialog-button primary" id="task-submit" disabled>创建</button></div></form></div>
@@ -1117,13 +1089,6 @@
   async function openNotebook(){document.getElementById('more-menu').classList.remove('open');if(nativeHostAvailable){try{const result=await nativeRequest('notebook.list');replaceNotebookItems(result.items||[],result.activeBindingId);renderNotebook();}catch(error){toast(error.message);return;}}else renderNotebook();document.getElementById('notebook-dialog').classList.add('open');}
   document.getElementById('open-notebook').addEventListener('click',openNotebook);
   document.getElementById('closed-open-notebook').addEventListener('click',openNotebook);
-  async function minimizeTodoWindow(){
-    document.getElementById('more-menu').classList.remove('open');
-    if(!nativeHostAvailable){notify('原型预览：此按钮会最小化 Todo 窗口');return;}
-    try{await nativeRequest('app.minimize');}
-    catch(error){notify(`最小化失败：${error.message}`);}
-  }
-  window.minimizeTodoWindow=minimizeTodoWindow;
   document.getElementById('configure-feishu-credentials').addEventListener('click',async()=>{
     moreMenu.classList.remove('open');
     if(!nativeHostAvailable){toast('请在 Todo 菜单栏中配置飞书应用凭证');return;}
@@ -1200,60 +1165,6 @@
     });
   });
   const note=document.getElementById('note');
-  const dragHandle=document.getElementById('drag-handle');
-  let dragging=false, resizing=false, startX=0, startY=0, baseLeft=0, baseTop=0, baseWidth=0, baseHeight=0, resizeEdge='';
-  dragHandle.addEventListener('pointerdown',event=>{
-    if(event.target.closest('button,input,select,label,.more-menu,.personalize-panel')) return;
-    dragging=true; dragHandle.setPointerCapture(event.pointerId);
-    const rect=note.getBoundingClientRect(); const parent=note.parentElement.getBoundingClientRect();
-    note.style.left=`${rect.left-parent.left}px`; note.style.top=`${rect.top-parent.top}px`;
-    startX=event.clientX; startY=event.clientY; baseLeft=parseFloat(note.style.left); baseTop=parseFloat(note.style.top);
-  });
-  dragHandle.addEventListener('pointermove',event=>{ if(!dragging)return; note.style.left=`${baseLeft+event.clientX-startX}px`; note.style.top=`${baseTop+event.clientY-startY}px`; });
-  dragHandle.addEventListener('pointerup',()=>dragging=false);
-  let lastDragRegionMetrics='';
-  function reportNativeDragRegion(){
-    if(!nativeHostAvailable)return;
-    const headerRect=dragHandle.getBoundingClientRect();
-    const interactiveRects=[...dragHandle.querySelectorAll('button,input,select,textarea,a,[role="button"],summary')]
-      .map(element=>{const rect=element.getBoundingClientRect();return{x:rect.left-headerRect.left,y:rect.top-headerRect.top,width:rect.width,height:rect.height};})
-      .filter(rect=>rect.width>0&&rect.height>0);
-    const metrics={height:headerRect.height,interactiveRects};
-    const serialized=JSON.stringify(metrics);
-    if(serialized===lastDragRegionMetrics)return;
-    lastDragRegionMetrics=serialized;
-    window.webkit.messageHandlers.todoHost.postMessage({action:'updateDragRegion',...metrics});
-  }
-  if(nativeHostAvailable){
-    const dragRegionResizeObserver=new ResizeObserver(reportNativeDragRegion);
-    dragRegionResizeObserver.observe(dragHandle);
-    const dragRegionMutationObserver=new MutationObserver(reportNativeDragRegion);
-    dragRegionMutationObserver.observe(dragHandle,{attributes:true,childList:true,subtree:true});
-    dragRegionMutationObserver.observe(note,{attributes:true,attributeFilter:['class','style']});
-    window.addEventListener('resize',reportNativeDragRegion);
-    requestAnimationFrame(reportNativeDragRegion);
-  }
-  // 四边和四角分别调整窗口位置及尺寸，宽高都不会低于便签最小尺寸。
-  document.querySelectorAll('.resize-handle').forEach(handle=>{
-    handle.addEventListener('pointerdown',event=>{
-      resizing=true; resizeEdge=handle.dataset.edge; handle.setPointerCapture(event.pointerId);
-      const rect=note.getBoundingClientRect(); const parent=note.parentElement.getBoundingClientRect();
-      baseLeft=rect.left-parent.left; baseTop=rect.top-parent.top; baseWidth=rect.width; baseHeight=rect.height;
-      startX=event.clientX; startY=event.clientY; event.preventDefault(); event.stopPropagation();
-    });
-    handle.addEventListener('pointermove',event=>{
-      if(!resizing)return;
-      const dx=event.clientX-startX, dy=event.clientY-startY;
-      let left=baseLeft, top=baseTop, width=baseWidth, height=baseHeight;
-      if(resizeEdge.includes('e')) width=Math.max(270,baseWidth+dx);
-      if(resizeEdge.includes('s')) height=Math.max(260,baseHeight+dy);
-      if(resizeEdge.includes('w')) { width=Math.max(270,baseWidth-dx); left=baseLeft+baseWidth-width; }
-      if(resizeEdge.includes('n')) { height=Math.max(260,baseHeight-dy); top=baseTop+baseHeight-height; }
-      note.style.left=`${left}px`; note.style.top=`${top}px`; note.style.width=`${width}px`; note.style.height=`${height}px`;
-    });
-    handle.addEventListener('pointerup',()=>{resizing=false;resizeEdge='';});
-    handle.addEventListener('lostpointercapture',()=>{resizing=false;resizeEdge='';});
-  });
   if(nativeHostAvailable){document.getElementById('active-list').replaceChildren();document.querySelector('#completed-list .task-list').replaceChildren();}
   function localDateKey(date){return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;}
   function dayKey(milliseconds){return localDateKey(new Date(milliseconds));}
@@ -1484,14 +1395,6 @@
   const fixedTaskPanel=document.getElementById('fixed-task-panel');
   let editingFixedTaskID=null;
   const failedFixedOccurrenceDates=new Map();
-  let dragRegionPassthroughEnabled=false;
-  const dragRegionPassthroughObserver=new MutationObserver(()=>{
-    const enabled=Boolean(document.querySelector('.add-menu.open,.more-menu.open,.personalize-panel.open,.fixed-task-panel.open,.dialog-backdrop.open'));
-    if(enabled===dragRegionPassthroughEnabled)return;
-    dragRegionPassthroughEnabled=enabled;
-    if(nativeHostAvailable)window.webkit.messageHandlers.todoHost.postMessage({action:'setDragRegionPassthrough',enabled});
-  });
-  dragRegionPassthroughObserver.observe(document.documentElement,{attributes:true,attributeFilter:['class'],subtree:true});
   function resetMenuSubmenus(){moreMenu.querySelectorAll('.menu-submenu.open').forEach(panel=>panel.classList.remove('open'));moreMenu.querySelectorAll('.menu-group[aria-expanded="true"]').forEach(button=>button.setAttribute('aria-expanded','false'));}
   moreButton.addEventListener('click',event=>{event.stopPropagation();closeAddMenu();if(moreMenu.classList.contains('open')){resetMenuSubmenus();moreMenu.classList.remove('open');}else{resetMenuSubmenus();moreMenu.classList.add('open');}personalizePanel.classList.remove('open');fixedTaskPanel.classList.remove('open');updateDeleteAvailability();});
   moreMenu.addEventListener('click',event=>{
