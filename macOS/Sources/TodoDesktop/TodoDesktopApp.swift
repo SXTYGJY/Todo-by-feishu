@@ -28,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private let activeBindingRepository = ActiveBindingRepository()
     private let notePreferencesRepository = NotePreferencesRepository()
     private let focusSessionRepository = FocusSessionRepository()
+    private let refreshCoordinator = SnapshotRefreshCoordinator<(snapshot: ViewSnapshot, warning: String?)>()
     private var staleBindingIDs = Set<String>()
     private var freshSnapshotBindingIDs = Set<String>()
     private var activeCompletionMutations: [String: String] = [:]
@@ -277,12 +278,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             appID = appIDField.stringValue
             appSecret = secretField.stringValue
 
+            let wasAuthenticated = authCoordinator.isAuthenticated
             do {
                 let credentials = try FeishuAppCredentials(appID: appID, appSecret: appSecret)
                 let changed = try authCoordinator.saveAppCredentials(credentials)
-                if changed { bridgeHandler.sendEvent("auth.signedOut") }
+                if changed {
+                    staleBindingIDs.removeAll()
+                    freshSnapshotBindingIDs.removeAll()
+                    bridgeHandler.sendEvent("auth.signedOut")
+                }
                 return true
             } catch {
+                if wasAuthenticated && !authCoordinator.isAuthenticated {
+                    staleBindingIDs.removeAll()
+                    freshSnapshotBindingIDs.removeAll()
+                    bridgeHandler.sendEvent("auth.signedOut")
+                }
                 showCredentialError(error.localizedDescription)
             }
         }
@@ -528,7 +539,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             return .success(request.requestID, result: result)
 
         case "auth.signOut":
-            authCoordinator.signOut()
+            do {
+                try authCoordinator.signOut()
+            } catch {
+                return .failure(request.requestID, code: "KEYCHAIN_ACCESS_FAILED",
+                                message: "无法删除钥匙串中的飞书令牌，账号仍处于登录状态。\n\(error.localizedDescription)")
+            }
             staleBindingIDs.removeAll()
             freshSnapshotBindingIDs.removeAll()
             bridgeHandler.sendEvent("auth.signedOut")
@@ -645,17 +661,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 guard !hasActiveCompletionMutation(bindingID: bindingID) else {
                     return .failure(request.requestID, code: "MUTATION_IN_PROGRESS", message: "任务状态正在写回，请稍后再切换便签。")
                 }
-                staleBindingIDs.insert(bindingID)
-                let token = try await authCoordinator.validAccessToken()
-                var generationWarning: String?
-                do {
-                    try await generateFixedTasksForToday(binding: binding, identity: identity, accessToken: token)
-                } catch {
-                    generationWarning = "固定待办暂未生成，稍后刷新会重试：\(error.localizedDescription)"
-                }
-                let snapshot = try await bindingService.refresh(binding: binding,
-                                                                identity: identity,
-                                                                accessToken: token)
+                let refresh = try await refreshNote(binding: binding, identity: identity)
+                let snapshot = refresh.snapshot
+                let generationWarning = refresh.warning
                 try activeBindingRepository.save(bindingID, for: identity)
                 staleBindingIDs.remove(bindingID)
                 freshSnapshotBindingIDs.insert(bindingID)
@@ -745,28 +753,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                       let binding = try bindingService.bindings(for: identity).first(where: { $0.id == bindingID }) else {
                     return .failure(request.requestID, code: "BINDING_NOT_FOUND", message: "找不到这张便签的视图关联。")
                 }
-                guard SnapshotRefreshAdmission.begin(
-                    bindingID: bindingID,
-                    hasActiveMutation: hasActiveCompletionMutation(bindingID: bindingID),
-                    markStale: { staleBindingIDs.insert($0) }
-                ) else {
+                guard !hasActiveCompletionMutation(bindingID: bindingID) else {
                     return .failure(request.requestID, code: "MUTATION_IN_PROGRESS", message: "任务状态正在写回，请稍后再刷新。")
                 }
                 do {
-                    let token = try await authCoordinator.validAccessToken()
-                    var generationWarning: String?
-                    do {
-                        try await generateFixedTasksForToday(binding: binding, identity: identity, accessToken: token)
-                    } catch {
-                        generationWarning = "固定待办暂未生成，稍后刷新会重试：\(error.localizedDescription)"
-                    }
-                    let snapshot = try await bindingService.refresh(binding: binding,
-                                                                    identity: identity,
-                                                                    accessToken: token)
-                    staleBindingIDs.remove(bindingID)
-                    freshSnapshotBindingIDs.insert(bindingID)
-                    var result: [String: Any] = ["snapshot": bridgeValue(for: snapshot, stale: false)]
-                    if let generationWarning { result["warning"] = generationWarning }
+                    let refresh = try await refreshNote(binding: binding, identity: identity)
+                    var result: [String: Any] = ["snapshot": bridgeValue(for: refresh.snapshot, stale: false)]
+                    if let warning = refresh.warning { result["warning"] = warning }
                     return .success(request.requestID, result: result)
                 } catch {
                     staleBindingIDs.insert(bindingID)
@@ -851,9 +844,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             case "notes.updateTask":
                 guard let bindingID = request.params["bindingId"] as? String,
                       let recordID = request.params["recordId"] as? String,
-                      let title = request.params["title"] as? String,
-                      let priorityOptionID = request.params["priorityOptionID"] as? String,
-                      let updatePlannedDuration = request.params["updatePlannedDuration"] as? Bool,
+                      let field = request.params["field"] as? String,
+                      ["title", "priority", "duration"].contains(field),
+                      let rawValue = request.params["value"],
                       let identity = authCoordinator.currentIdentity,
                       let binding = try bindingService.bindings(for: identity).first(where: { $0.id == bindingID }) else {
                     return .failure(request.requestID, code: "INVALID_ARGUMENT", message: "缺少有效的便签、任务内容或优先级。")
@@ -868,32 +861,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 }
                 activeCompletionMutations[mutationKey] = bindingID
                 defer { activeCompletionMutations.removeValue(forKey: mutationKey) }
-                var plannedNumber: NSNumber?
-                if updatePlannedDuration {
-                    guard let rawDuration = request.params["plannedDurationHours"] else {
-                        return .failure(request.requestID, code: "INVALID_ARGUMENT", message: "缺少计划时长值；清空时请传入 null。")
+                let input: BitableValue
+                if field == "duration" {
+                    if rawValue is NSNull {
+                        input = .null
+                    } else if let number = rawValue as? NSNumber,
+                              CFGetTypeID(number) != CFBooleanGetTypeID(),
+                              number.doubleValue.isFinite, number.doubleValue >= 0.5,
+                              (number.doubleValue * 2).rounded() == number.doubleValue * 2 {
+                        input = .number(number.doubleValue)
+                    } else {
+                        return .failure(request.requestID, code: "INVALID_ARGUMENT", message: "计划时长需以 0.5 小时为单位。")
                     }
-                    if !(rawDuration is NSNull) {
-                        guard let number = rawDuration as? NSNumber,
-                              CFGetTypeID(number) != CFBooleanGetTypeID() else {
-                            return .failure(request.requestID, code: "INVALID_ARGUMENT", message: "计划时长必须是数字或空值。")
-                        }
-                        plannedNumber = number
-                    }
-                }
-                if let plannedNumber,
-                   (!plannedNumber.doubleValue.isFinite || plannedNumber.doubleValue < 0.5
-                    || (plannedNumber.doubleValue * 2).rounded() != plannedNumber.doubleValue * 2) {
-                    return .failure(request.requestID, code: "INVALID_ARGUMENT", message: "计划时长需以 0.5 小时为单位。")
+                } else if let text = rawValue as? String, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    input = .string(text)
+                } else {
+                    return .failure(request.requestID, code: "INVALID_ARGUMENT", message: "请输入有效的任务内容或优先级。")
                 }
                 let token = try await authCoordinator.validAccessToken()
                 let result = try await bindingService.updateTask(binding: binding,
                                                                  identity: identity,
                                                                  recordID: recordID,
-                                                                 title: title,
-                                                                 priorityOptionID: priorityOptionID,
-                                                                 plannedDurationHours: plannedNumber?.doubleValue,
-                                                                 updatePlannedDuration: updatePlannedDuration,
+                                                                 field: field,
+                                                                 value: input,
                                                                  accessToken: token)
                 if result.isStale {
                     staleBindingIDs.insert(bindingID)
@@ -1212,6 +1202,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     private func hasActiveCompletionMutation(bindingID: String) -> Bool {
         activeCompletionMutations.values.contains(bindingID)
+    }
+
+    private func refreshNote(binding: ViewBinding, identity: FeishuIdentity) async throws -> (snapshot: ViewSnapshot, warning: String?) {
+        let key = "\(identity.storageKey)|\(binding.id)"
+        return try await refreshCoordinator.run(key: key) {
+            guard SnapshotRefreshAdmission.begin(
+                bindingID: binding.id,
+                hasActiveMutation: self.hasActiveCompletionMutation(bindingID: binding.id),
+                markStale: { self.staleBindingIDs.insert($0) }
+            ) else {
+                throw FeishuBitableError.invalidResponse("任务状态正在写回，请稍后再刷新。")
+            }
+            let token = try await self.authCoordinator.validAccessToken()
+            var warning: String?
+            do {
+                try await self.generateFixedTasksForToday(binding: binding, identity: identity, accessToken: token)
+            } catch {
+                warning = "固定待办暂未生成，稍后刷新会重试：\(error.localizedDescription)"
+            }
+            let snapshot = try await self.bindingService.refresh(binding: binding, identity: identity, accessToken: token)
+            self.staleBindingIDs.remove(binding.id)
+            self.freshSnapshotBindingIDs.insert(binding.id)
+            return (snapshot, warning)
+        }
     }
 
     private func generateFixedTasksForToday(binding: ViewBinding,

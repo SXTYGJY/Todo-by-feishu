@@ -34,6 +34,7 @@ struct FeishuOAuthConfiguration {
 }
 
 enum OAuthError: LocalizedError {
+    case randomGenerationFailed
     case invalidAuthorizationURL
     case callbackAlreadyRunning
     case callbackTimedOut
@@ -46,6 +47,7 @@ enum OAuthError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
+        case .randomGenerationFailed: return "无法生成安全授权信息，请稍后重试。"
         case .invalidAuthorizationURL: return "无法创建飞书授权链接。"
         case .callbackAlreadyRunning: return "飞书授权已经在进行中。"
         case .callbackTimedOut: return "等待飞书授权超时，请重试。"

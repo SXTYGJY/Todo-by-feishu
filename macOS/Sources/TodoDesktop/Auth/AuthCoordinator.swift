@@ -9,6 +9,8 @@ final class AuthCoordinator {
     private let tokenStore: KeychainTokenStore
     private let appCredentialsStore: KeychainAppCredentialsStore
     private let workspaceRepository: WorkspaceRepository
+    private let defaults: UserDefaults
+    private let deleteToken: (String) throws -> Void
     private let identityDefaultsKey = "TodoDesktop.auth.identity"
     private let displayNameDefaultsKey = "TodoDesktop.auth.displayName"
     private var authorizationTask: Task<Void, Never>?
@@ -20,11 +22,15 @@ final class AuthCoordinator {
     init(configuration: FeishuOAuthConfiguration = .standard,
          tokenStore: KeychainTokenStore = KeychainTokenStore(),
          appCredentialsStore: KeychainAppCredentialsStore = KeychainAppCredentialsStore(),
-         workspaceRepository: WorkspaceRepository = WorkspaceRepository()) {
+         workspaceRepository: WorkspaceRepository = WorkspaceRepository(),
+         defaults: UserDefaults = .standard,
+         deleteToken: ((String) throws -> Void)? = nil) {
         self.configuration = configuration
         self.tokenStore = tokenStore
         self.appCredentialsStore = appCredentialsStore
         self.workspaceRepository = workspaceRepository
+        self.defaults = defaults
+        self.deleteToken = deleteToken ?? tokenStore.delete(for:)
     }
 
     func loadAppCredentials() throws -> FeishuAppCredentials? {
@@ -34,18 +40,18 @@ final class AuthCoordinator {
     @discardableResult
     func saveAppCredentials(_ credentials: FeishuAppCredentials) throws -> Bool {
         let changed = try appCredentialsStore.load() != credentials
+        if changed { try signOut() }
         try appCredentialsStore.save(credentials)
-        if changed { signOut() }
         return changed
     }
 
     var currentIdentity: FeishuIdentity? {
-        guard let data = UserDefaults.standard.data(forKey: identityDefaultsKey) else { return nil }
+        guard let data = defaults.data(forKey: identityDefaultsKey) else { return nil }
         return try? JSONDecoder().decode(FeishuIdentity.self, from: data)
     }
 
     var currentDisplayName: String? {
-        UserDefaults.standard.string(forKey: displayNameDefaultsKey)
+        defaults.string(forKey: displayNameDefaultsKey)
     }
 
     var isAuthenticated: Bool { currentIdentity != nil }
@@ -73,12 +79,12 @@ final class AuthCoordinator {
         authorizationTask = nil
     }
 
-    func signOut() {
+    func signOut() throws {
         if let identity = currentIdentity {
-            try? tokenStore.delete(for: identity.storageKey)
+            try deleteToken(identity.storageKey)
         }
-        UserDefaults.standard.removeObject(forKey: identityDefaultsKey)
-        UserDefaults.standard.removeObject(forKey: displayNameDefaultsKey)
+        defaults.removeObject(forKey: identityDefaultsKey)
+        defaults.removeObject(forKey: displayNameDefaultsKey)
     }
 
     func validAccessToken() async throws -> String {
@@ -103,8 +109,8 @@ final class AuthCoordinator {
         guard let credentials = try appCredentialsStore.load() else {
             throw OAuthError.invalidAppCredentials("请先配置飞书自建应用凭证。")
         }
-        let state = Self.randomURLSafeString(byteCount: 32)
-        let verifier = Self.randomURLSafeString(byteCount: 48)
+        let state = try Self.randomURLSafeString(byteCount: 32)
+        let verifier = try Self.randomURLSafeString(byteCount: 48)
         let challenge = Self.codeChallenge(for: verifier)
         let callbackServer = LoopbackOAuthCallbackServer(host: configuration.callbackHost,
                                                           port: configuration.callbackPort,
@@ -135,15 +141,18 @@ final class AuthCoordinator {
                                       displayName: profile.name)
         try tokenStore.save(tokenSet)
         let identityData = try JSONEncoder().encode(identity)
-        UserDefaults.standard.set(identityData, forKey: identityDefaultsKey)
-        UserDefaults.standard.set(profile.name, forKey: displayNameDefaultsKey)
+        defaults.set(identityData, forKey: identityDefaultsKey)
+        defaults.set(profile.name, forKey: displayNameDefaultsKey)
         _ = try workspaceRepository.load(for: identity)
         return (identity, profile.name)
     }
 
-    private static func randomURLSafeString(byteCount: Int) -> String {
+    static func randomURLSafeString(byteCount: Int,
+                                    fill: (Int, UnsafeMutableRawPointer) -> OSStatus = { SecRandomCopyBytes(kSecRandomDefault, $0, $1) }) throws -> String {
+        guard byteCount > 0 else { throw OAuthError.randomGenerationFailed }
         var bytes = [UInt8](repeating: 0, count: byteCount)
-        _ = SecRandomCopyBytes(kSecRandomDefault, byteCount, &bytes)
+        let status = bytes.withUnsafeMutableBytes { fill(byteCount, $0.baseAddress!) }
+        guard status == errSecSuccess else { throw OAuthError.randomGenerationFailed }
         return Data(bytes).base64EncodedString()
             .replacingOccurrences(of: "+", with: "-")
             .replacingOccurrences(of: "/", with: "_")

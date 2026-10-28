@@ -941,12 +941,8 @@
     inlineTaskEditState=null;inlineTaskSaving=true;
     nativeTodoItems=nativeTodoItems.map(todo=>todo.id===item.id?updated:todo);renderNativePage();
     try{
-      const options=await loadTaskOptions(state.bindingID);
-      if(activeBindingId!==state.bindingID)return;
-      if(state.field==='duration'&&!options.plannedDurationAvailable)throw new Error('当前视图未配置计划时长字段，无法修改。');
-      const priorityOption=options.options.find(candidate=>candidate.name===priority);
-      if(!priorityOption)throw new Error('该任务的优先级选项已不存在，请检查飞书字段设置。');
-      const result=await nativeRequest('notes.updateTask',{bindingId:state.bindingID,recordId:item.id,title,priorityOptionID:priorityOption.id,plannedDurationHours:options.plannedDurationAvailable?plannedDurationHours:null,updatePlannedDuration:options.plannedDurationAvailable});
+      const value=state.field==='title'?title:state.field==='priority'?rawValue:plannedDurationHours;
+      const result=await nativeRequest('notes.updateTask',{bindingId:state.bindingID,recordId:item.id,field:state.field,value});
       if(activeBindingId===state.bindingID){if(result.snapshot)applyNativeSnapshot(result.snapshot);else{nativeSnapshotStale=true;networkUnavailable=true;renderNativePage();}}
       if(result.warning)notify(result.warning);
     }catch(error){
@@ -1366,7 +1362,7 @@
     if(activeBindingId)renderNativePage();
     if(snapshot.error&&navigator.onLine)toast(`刷新失败，继续显示上次数据：${snapshot.error}`);
   }
-  async function refreshActiveNote(){if(!nativeHostAvailable||!activeBindingId)return;nativeLoadError='';try{const result=await nativeRequest('notes.refresh',{bindingId:activeBindingId,reason:'manual'});applyNativeSnapshot(result.snapshot);if(result.warning)notify(result.warning);if(result.error){nativeLoadError=result.error;networkUnavailable=true;updateNetworkIndicator();if(hasActiveAccountPending())scheduleCompletionRetry();return;}flushPendingCompletions();}catch(error){nativeLoadError=error.message;nativeSnapshotStale=nativeHasSnapshot;networkUnavailable=isNetworkFailure(error);renderNativePage();if(!isNetworkFailure(error))toast(`无法刷新飞书数据：${error.message}`);}}
+  async function refreshActiveNote(){if(!nativeHostAvailable||!activeBindingId)return;const bindingId=activeBindingId,accountKey=activeAccountKey;nativeLoadError='';try{const result=await nativeRequest('notes.refresh',{bindingId,reason:'manual'});if(activeBindingId!==bindingId||activeAccountKey!==accountKey)return;applyNativeSnapshot(result.snapshot);if(result.warning)notify(result.warning);if(result.error){nativeLoadError=result.error;networkUnavailable=true;updateNetworkIndicator();if(hasActiveAccountPending())scheduleCompletionRetry();return;}flushPendingCompletions();}catch(error){if(activeBindingId!==bindingId||activeAccountKey!==accountKey)return;nativeLoadError=error.message;nativeSnapshotStale=nativeHasSnapshot;networkUnavailable=isNetworkFailure(error);renderNativePage();if(!isNetworkFailure(error))toast(`无法刷新飞书数据：${error.message}`);}}
   window.__todoMoveTaskToToday=async({bindingId:bindingID,recordId:recordID})=>{
     if(!nativeHostAvailable||!bindingID||!recordID||bindingID!==activeBindingId)return;
     const item=nativeTodoItems.find(todo=>todo.id===recordID);if(!item||item.isDone)return;

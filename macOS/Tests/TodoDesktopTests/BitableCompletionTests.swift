@@ -46,6 +46,43 @@ final class BitableCompletionTests: XCTestCase {
         XCTAssertEqual(methods, ["PUT /open-apis/bitable/v1/apps/app-token/tables/table-id/records/record-id"])
     }
 
+    func testTaskEditsOnlyWriteTheSelectedField() async throws {
+        let fixture = try makeFixture()
+        var binding = fixture.binding
+        binding.fieldMapping?.plannedDurationFieldID = "duration-id"
+        binding.fieldMapping?.plannedDurationFieldName = "计划时长"
+        let fields = Self.fieldsResponse.replacingOccurrences(of: "],\"has_more\":false", with: ",{\"field_id\":\"duration-id\",\"field_name\":\"计划时长\",\"type\":2}],\"has_more\":false")
+        let edits: [(String, BitableValue, String, Any)] = [
+            ("title", .string("新任务"), "任务内容", "新任务"),
+            ("priority", .string("high"), "优先级", "高"),
+            ("duration", .number(1.5), "计划时长", 1.5),
+            ("duration", .null, "计划时长", NSNull())
+        ]
+        for (field, value, expectedName, expectedValue) in edits {
+            CompletionURLProtocol.handler = { request in
+                switch (request.httpMethod, request.url?.path) {
+                case ("GET", "/open-apis/bitable/v1/apps/app-token/tables/table-id/fields"):
+                    return (200, fields)
+                case ("PUT", "/open-apis/bitable/v1/apps/app-token/tables/table-id/records/record-id"):
+                    let body = try Self.bodyData(from: request)
+                    let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+                    let sent = try XCTUnwrap(json["fields"] as? [String: Any])
+                    XCTAssertEqual(Array(sent.keys), [expectedName])
+                    XCTAssertEqual(String(describing: sent[expectedName]!), String(describing: expectedValue))
+                    return (200, Self.recordResponse(status: "未完成"))
+                case ("GET", "/open-apis/bitable/v1/apps/app-token/tables/table-id/records"):
+                    return (200, Self.recordsResponse(status: "未完成"))
+                default:
+                    XCTFail("Unexpected request")
+                    return (500, #"{"code":1,"msg":"unexpected"}"#)
+                }
+            }
+            _ = try await fixture.service.updateTask(binding: binding, identity: fixture.identity,
+                                                       recordID: "record-id", field: field,
+                                                       value: value, accessToken: "user-token")
+        }
+    }
+
     func testSnapshotRepositoryReadsBackItsISO8601FetchDate() throws {
         let identity = FeishuIdentity(userID: "user", tenantID: "tenant")
         let repository = SnapshotRepository(rootDirectory: storageDirectory)

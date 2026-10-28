@@ -30,11 +30,17 @@ struct BitableBindingService {
         return BindingInspection(link: link, view: resolvedView, fields: resolvedFields)
     }
 
+    @MainActor
     func createBinding(inspection: BindingInspection,
                        fieldMapping: FieldMapping,
                        identity: FeishuIdentity,
                        accessToken: String) async throws -> (ViewBinding, ViewSnapshot) {
         let mapping = try validate(fieldMapping, fields: inspection.fields)
+        let records = try await client.listRecords(appToken: inspection.link.resourceToken,
+                                                   tableID: inspection.link.tableID,
+                                                   viewID: inspection.link.viewID,
+                                                   accessToken: accessToken)
+        let snapshot = try project(records: records, mapping: mapping)
         var workspace = try workspaceRepository.load(for: identity)
         guard !workspace.bindings.contains(where: {
             !$0.isDeleted && $0.resourceToken == inspection.link.resourceToken
@@ -43,11 +49,6 @@ struct BitableBindingService {
             throw FeishuBitableError.duplicateBinding
         }
 
-        let records = try await client.listRecords(appToken: inspection.link.resourceToken,
-                                                   tableID: inspection.link.tableID,
-                                                   viewID: inspection.link.viewID,
-                                                   accessToken: accessToken)
-        let snapshot = try project(records: records, mapping: mapping)
         let binding = ViewBinding(link: inspection.link,
                                   identity: identity,
                                   fieldMapping: mapping,
@@ -170,20 +171,9 @@ struct BitableBindingService {
     func updateTask(binding: ViewBinding,
                     identity: FeishuIdentity,
                     recordID: String,
-                    title: String,
-                    priorityOptionID: String,
-                    plannedDurationHours: Double?,
-                    updatePlannedDuration: Bool,
+                    field: String,
+                    value: BitableValue,
                     accessToken: String) async throws -> TaskMutationResult {
-        let taskTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !taskTitle.isEmpty else {
-            throw FeishuBitableError.invalidResponse("请输入待办内容。")
-        }
-        if updatePlannedDuration, let plannedDurationHours,
-           (!plannedDurationHours.isFinite || plannedDurationHours < 0.5
-            || (plannedDurationHours * 2).rounded() != plannedDurationHours * 2) {
-            throw FeishuBitableError.invalidResponse("计划时长需以 0.5 小时为单位。")
-        }
         guard let mapping = binding.fieldMapping,
               let existingItem = snapshotRepository.load(identity: identity, bindingID: binding.id)?.items.first(where: { $0.id == recordID }) else {
             throw FeishuBitableError.invalidResponse("该便签尚未完成字段绑定，请重新绑定视图。")
@@ -192,33 +182,55 @@ struct BitableBindingService {
                                                  tableID: binding.tableID,
                                                  accessToken: accessToken)
         let resolvedMapping = try validate(mapping, fields: fields)
-        guard let taskFieldName = resolvedMapping.taskFieldName,
-              let priorityFieldID = resolvedMapping.priorityFieldID,
-              let priorityFieldName = resolvedMapping.priorityFieldName,
-              let priorityOption = fields.first(where: { $0.id == priorityFieldID })?
-                .property?.options?.first(where: { $0.id == priorityOptionID }) else {
-            throw FeishuBitableError.incompatibleField("所选优先级已不存在，请重新选择。")
+        let fieldName: String
+        let fieldValue: BitableValue
+        var title = existingItem.title
+        var priority = existingItem.priority
+        var duration = existingItem.plannedDurationHours
+        switch (field, value) {
+        case ("title", .string(let text)):
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, let name = resolvedMapping.taskFieldName else {
+                throw FeishuBitableError.invalidResponse("请输入待办内容。")
+            }
+            title = trimmed
+            fieldName = name
+            fieldValue = .string(trimmed)
+        case ("priority", .string(let optionID)):
+            guard let id = resolvedMapping.priorityFieldID,
+                  let name = resolvedMapping.priorityFieldName,
+                  let option = fields.first(where: { $0.id == id })?.property?.options?.first(where: { $0.id == optionID }) else {
+                throw FeishuBitableError.incompatibleField("所选优先级已不存在，请重新选择。")
+            }
+            priority = option.name
+            fieldName = name
+            fieldValue = .string(option.name)
+        case ("duration", .number(let hours)) where hours.isFinite && hours >= 0.5 && (hours * 2).rounded() == hours * 2:
+            guard let name = resolvedMapping.plannedDurationFieldName else {
+                throw FeishuBitableError.missingField("计划时长")
+            }
+            duration = hours
+            fieldName = name
+            fieldValue = .number(hours)
+        case ("duration", .null):
+            guard let name = resolvedMapping.plannedDurationFieldName else {
+                throw FeishuBitableError.missingField("计划时长")
+            }
+            duration = nil
+            fieldName = name
+            fieldValue = .null
+        default:
+            throw FeishuBitableError.invalidResponse("任务字段或输入值无效。")
         }
 
-        var recordFields: [String: BitableValue] = [
-            taskFieldName: .string(taskTitle),
-            priorityFieldName: .string(priorityOption.name)
-        ]
-        if updatePlannedDuration, let plannedFieldName = resolvedMapping.plannedDurationFieldName {
-            recordFields[plannedFieldName] = plannedDurationHours.map(BitableValue.number) ?? .null
-        }
-
-        var updateError: Error?
         do {
             _ = try await client.updateRecord(appToken: binding.resourceToken,
                                               tableID: binding.tableID,
                                               recordID: recordID,
-                                              fields: recordFields,
+                                              fields: [fieldName: fieldValue],
                                               accessToken: accessToken)
         } catch {
-            updateError = error
-        }
-        if let updateError {
+            let updateError = error
             let actual: BitableRecord
             do {
                 actual = try await client.getRecord(appToken: binding.resourceToken,
@@ -230,15 +242,17 @@ struct BitableBindingService {
                     "修改结果暂时无法确认。请刷新视图后检查该任务，不要重复提交。\n\(updateError.localizedDescription)\n核对失败：\(error.localizedDescription)"
                 )
             }
-            let matchesTitle = actual.fields[taskFieldName]?.text == taskTitle
-            let matchesPriority = actual.fields[priorityFieldName]?.text == priorityOption.name
-            let matchesDuration: Bool
-            if updatePlannedDuration, let plannedFieldName = resolvedMapping.plannedDurationFieldName {
-                matchesDuration = plannedDurationHours == actual.fields[plannedFieldName]?.numericValue
-            } else {
-                matchesDuration = true
+            let matches: Bool
+            switch fieldValue {
+            case .string(let expected): matches = actual.fields[fieldName]?.text == expected
+            case .number(let expected): matches = actual.fields[fieldName]?.numericValue == expected
+            case .null:
+                if let actualValue = actual.fields[fieldName] {
+                    if case .null = actualValue { matches = true } else { matches = false }
+                } else { matches = true }
+            default: matches = false
             }
-            guard matchesTitle && matchesPriority && matchesDuration else {
+            guard matches else {
                 throw FeishuBitableError.mutationRejected("飞书中的任务内容未确认更新。\(updateError.localizedDescription)")
             }
         }
@@ -246,25 +260,19 @@ struct BitableBindingService {
         do {
             let snapshot = try await refresh(binding: binding, identity: identity, accessToken: accessToken)
             let visible = snapshot.items.contains(where: { $0.id == recordID })
-            return TaskMutationResult(snapshot: snapshot,
-                                      isStale: false,
-                                      visibleInView: visible,
+            return TaskMutationResult(snapshot: snapshot, isStale: false, visibleInView: visible,
                                       warning: visible ? nil : "任务已修改，但当前视图没有显示它。请检查飞书视图筛选。")
         } catch {
             let local = try snapshotRepository.saveTask(identity: identity,
                                                         bindingID: binding.id,
                                                         recordID: recordID,
-                                                        title: taskTitle,
-                                                        priority: priorityOption.name,
-                                                        plannedDurationHours: updatePlannedDuration && resolvedMapping.plannedDurationFieldName != nil
-                                                            ? plannedDurationHours
-                                                            : existingItem.plannedDurationHours)
+                                                        title: title,
+                                                        priority: priority,
+                                                        plannedDurationHours: duration)
             guard let local else {
                 throw FeishuBitableError.mutationOutcomeUnknown("任务已写回飞书，但本机无法更新快照。请刷新视图。\(error.localizedDescription)")
             }
-            return TaskMutationResult(snapshot: local,
-                                      isStale: true,
-                                      visibleInView: false,
+            return TaskMutationResult(snapshot: local, isStale: true, visibleInView: false,
                                       warning: "任务已写回飞书，但视图暂时无法刷新。\(error.localizedDescription)")
         }
     }
